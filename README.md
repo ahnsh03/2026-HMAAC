@@ -1,5 +1,7 @@
 # H-모빌리티 클래스 자율주행 심화과정
-![image](https://github.com/user-attachments/assets/dcb18208-73f5-4e06-97a5-8838f85a0d85)
+
+<img src="docs/H-모빌리티_Github_banner.png" alt="자율주행 심화과정 입과를 환영합니다 — H-모빌리티 클래스 X 현대자동차" width="100%">
+
 성균관대학교 자동화연구실의 H-모빌리티 클래스 자율주행 심화과정 실습 코드입니다.
 
 ---
