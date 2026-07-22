@@ -2,7 +2,7 @@ int sensorPin = A2;
 
 void setup() {
 
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   pinMode(sensorPin, INPUT);
 
