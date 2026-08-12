@@ -1,3 +1,10 @@
 /install
 /build
 /log
+
+# Regenerated Python caches (vendored *.pyc libs outside __pycache__ stay tracked)
+**/__pycache__/
+
+# Runtime data-collection sessions (sample_dataset and shipped assets stay tracked)
+src/camera_perception_pkg/camera_perception_pkg/lib/Collected_Datasets/20*/
+src/camera_perception_pkg/camera_perception_pkg/lib/Collected_Datasets/_*/
