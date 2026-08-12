@@ -52,15 +52,17 @@ class Yolov8Node(LifecycleNode):
         super().__init__("yolov8_node", **kwargs)
         
         #---------------Variable Setting---------------
-        # 딥러닝 모델 pt 파일명 작성
+        # 실차: 트랙에서 학습한 best.pt 사용 (docs/team/yolo-weights.md)
+        # launch에서 덮어쓰기 예: model:=best.pt device:=cuda:0
+        # 기본 yolov8m.pt 는 스텁/다운로드용. 실주행 전 best.pt 로 교체할 것.
         self.declare_parameter("model", "yolov8m.pt")
         # self.declare_parameter("model", "best.pt")
-        
-        # 추론 하드웨어 선택 (cpu / gpu) 
+
+        # 추론 하드웨어 선택 (cpu / gpu)
         self.declare_parameter("device", "cpu")
         # self.declare_parameter("device", "cuda:0")
         #----------------------------------------------
-        
+
         self.declare_parameter("threshold", 0.5)
         self.declare_parameter("enable", True)
         self.declare_parameter("image_reliability",

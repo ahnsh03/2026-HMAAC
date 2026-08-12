@@ -16,6 +16,10 @@ SUB_TRAFFIC_LIGHT_TOPIC_NAME = "yolov8_traffic_light_info"
 SUB_LIDAR_OBSTACLE_TOPIC_NAME = "lidar_obstacle_info"
 PUB_TOPIC_NAME = "topic_control_signal"
 
+# 저속 첫 주행 기본값 (launch: drive_speed:= / steer_max:= 로 덮어쓰기)
+# 문서: docs/team/lowspeed-tuning.md
+DEFAULT_DRIVE_SPEED = 60   # 0~255, 안정화 후 80~120 등으로 상향
+DEFAULT_STEER_MAX = 7      # driving.ino MAX_STEERING_STEP 과 일치
 #----------------------------------------------
 
 # 모션 플랜 발행 주기 (초) - 소수점 필요 (int형은 반영되지 않음)
@@ -31,8 +35,10 @@ class MotionPlanningNode(Node):
         self.sub_traffic_light_topic = self.declare_parameter('sub_traffic_light_topic', SUB_TRAFFIC_LIGHT_TOPIC_NAME).value
         self.sub_lidar_obstacle_topic = self.declare_parameter('sub_lidar_obstacle_topic', SUB_LIDAR_OBSTACLE_TOPIC_NAME).value
         self.pub_topic = self.declare_parameter('pub_topic', PUB_TOPIC_NAME).value
-        
+
         self.timer_period = self.declare_parameter('timer', TIMER).value
+        self.drive_speed = int(self.declare_parameter('drive_speed', DEFAULT_DRIVE_SPEED).value)
+        self.steer_max = int(self.declare_parameter('steer_max', DEFAULT_STEER_MAX).value)
 
         # QoS 설정
         self.qos_profile = QoSProfile(
@@ -64,6 +70,9 @@ class MotionPlanningNode(Node):
 
         # 타이머 설정
         self.timer = self.create_timer(self.timer_period, self.timer_callback)
+        self.get_logger().info(
+            f'drive_speed={self.drive_speed}, steer_max={self.steer_max}'
+        )
 
     def detection_callback(self, msg: DetectionArray):
         self.detection_data = msg
@@ -106,15 +115,15 @@ class MotionPlanningNode(Node):
                 target_slope = DMFL.calculate_slope_between_points(self.path_data[-10], self.path_data[-1])
                 
                 if target_slope > 0:
-                    self.steering_command =  7 # 예시 조향 값 (7이 최대 조향) 
+                    self.steering_command = self.steer_max
                 elif target_slope < 0:
-                    self.steering_command =  -7
+                    self.steering_command = -self.steer_max
                 else:
                     self.steering_command = 0
 
 
-            self.left_speed_command = 100  # 예시 속도 값 (255가 최대 속도)
-            self.right_speed_command = 100  # 예시 속도 값 (255가 최대 속도)
+            self.left_speed_command = self.drive_speed
+            self.right_speed_command = self.drive_speed
 
 
 

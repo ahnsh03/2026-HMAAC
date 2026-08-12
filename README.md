@@ -1,6 +1,6 @@
 # 2026 H-모빌리티 클래스 자율주행 심화과정
 
-<img src="docs/GitHub_banner.png" alt="자율주행 심화과정 입과를 환영합니다 — H-모빌리티 클래스 X 현대자동차" width="100%">
+<img src="docs/assets/GitHub_banner.png" alt="자율주행 심화과정 입과를 환영합니다 — H-모빌리티 클래스 X 현대자동차" width="100%">
 
 성균관대학교 자동화연구실의 H-모빌리티 클래스 자율주행 심화과정 실습 코드입니다.
 
@@ -69,7 +69,10 @@ source install/setup.bash
 
 ```bash
 ros2 launch launch_pkg main.launch.py
+# 실차 예: model:=best.pt drive_speed:=50  (docs/team/ 참고)
 ```
+
+팀 실차 단계 가이드: [`docs/team/repo-structure-and-realcar-guide.md`](docs/team/repo-structure-and-realcar-guide.md)
 
 ---
 

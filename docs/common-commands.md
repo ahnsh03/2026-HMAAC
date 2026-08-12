@@ -1,0 +1,214 @@
+# 자주 쓰는 명령어
+
+실차·개발 때 터미널에 자주 치는 명령만 모았다.  
+짧은 치트시트: [team/cheat-sheet.md](team/cheat-sheet.md) · HW 부팅: [team/hw-boot.md](team/hw-boot.md)
+
+실차 노트북은 **Ubuntu 22.04 + ROS2 Humble 네이티브** 기준이다 (Docker 안 씀).  
+교육장 경로 `~/ros2_ws` ≈ 이 워크스페이스의 `H-Mobility-Autonomous-Advanced-Course/`.
+
+---
+
+## 1. ROS2 환경
+
+```bash
+source /opt/ros/humble/setup.bash
+source ~/ros2_ws/install/setup.bash   # 또는 cd ~/ros2_ws && source install/setup.bash
+
+# (선택) 팀 노트북끼리 토픽 안 섞이게
+export ROS_LOCALHOST_ONLY=1
+# export ROS_DOMAIN_ID=14
+```
+
+터미널 열 때마다 `source`가 귀찮으면:
+
+```bash
+echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+# 워크스페이스 install은 경로가 바뀔 수 있어 필요할 때만 source
+```
+
+---
+
+## 2. 장치 확인
+
+```bash
+ls -l /dev/video*
+ls -l /dev/ttyACM*    # Arduino
+ls -l /dev/ttyUSB*    # LiDAR 등
+```
+
+| 장치 | 흔한 이름 | 코드에서 고칠 곳 |
+|------|-----------|------------------|
+| 카메라 | `/dev/video0` 등 | `cam_num` / `CAMERA_NUM` |
+| Arduino | `/dev/ttyACM0` | `PORT` / `SERIAL_PORT` |
+| LiDAR | `/dev/ttyUSB0` 등 | lidar 포트 파라미터 |
+
+---
+
+## 3. 시리얼 권한 (`ttyACM0`)
+
+`sudo chmod 777 /dev/ttyACM0`은 **임시**다. 노트북 재부팅·USB 재연결마다 장치 노드가 다시 만들어져 권한이 풀린다.
+
+### 3-1. 영구 (권장) — `dialout` 그룹
+
+```bash
+sudo usermod -aG dialout $USER
+```
+
+**로그아웃 후 다시 로그인**(또는 재부팅)해야 적용된다.
+
+```bash
+groups                  # dialout 이 보이면 OK
+ls -l /dev/ttyACM0      # 보통 root dialout, 모드 rw-rw----
+```
+
+이후 Arduino를 뽑았다 꽂아도 보통 `chmod` 없이 열린다.
+
+### 3-2. 영구 — udev 규칙 (노트북당 1회)
+
+`/etc/udev/rules.d/99-arduino-serial.rules` 내용 예:
+
+```text
+KERNEL=="ttyACM*", MODE="0666", GROUP="dialout"
+KERNEL=="ttyUSB*", MODE="0666", GROUP="dialout"
+```
+
+```bash
+sudo nano /etc/udev/rules.d/99-arduino-serial.rules   # 위 내용 저장
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+# USB 뽑았다 꽂은 뒤
+ls -l /dev/ttyACM0
+```
+
+### 3-3. 임시 (급할 때만)
+
+```bash
+sudo chmod 777 /dev/ttyACM0   # 장치명에 맞게
+```
+
+Arduino IDE **시리얼 모니터**와 ROS `serial_sender`를 동시에 열지 말 것.
+
+---
+
+## 4. `chmod +x` vs `chmod 777`
+
+둘 다 “권한”을 바꾸지만 **대상과 의미가 다르다**.
+
+### 한 줄 요약
+
+| 명령 | 무엇을 하나 | 언제 쓰나 |
+|------|-------------|-----------|
+| `chmod +x` / **`chmod 755`** | 실행 비트 켜기 (보통 소유 rwx, 남 r-x) | 스크립트를 `./script.sh`로 실행 |
+| `chmod 777` | 전원한(`rwx`×3) | 시리얼 임시 개방 (재연결 시 풀림) |
+
+### 숫자 한 자리 뜻
+
+각 자리는 **소유자 / 그룹 / 기타**이고, 한 자리 안에서:
+
+| 값 | 의미 | 기호 |
+|----|------|------|
+| `4` | 읽기 | `r` |
+| `2` | 쓰기 | `w` |
+| `1` | 실행 | `x` |
+| 합 | 예: `4+2+1=7` → `rwx`, `4+1=5` → `r-x`, `4+2=6` → `rw-` |
+
+### `chmod +x` ↔ 숫자 **`755`**
+
+- `+x` = 실행(`x`) 비트만 **추가** (기존 r/w는 유지)
+- 일반 파일 기본이 `644`(`rw-r--r--`)일 때 `chmod +x` 하면 결과가 **`755`** (`rwxr-xr-x`)
+- 그래서 스크립트에 “`+x`랑 같은 숫자”라고 하면 보통 **`755`** 를 말한다
+
+```bash
+chmod +x script.sh      # 기호 방식
+chmod 755 script.sh     # 숫자로 같은 목적 (일반 스크립트)
+./script.sh
+```
+
+`777`은 `+x`의 대응이 **아니다**. `777`은 전원한(`rwx`×3), `755`는 “실행 가능하게 + 남에게는 쓰기만 막기”다.
+
+### `chmod 777`
+
+- `777` = 누구나 읽기·쓰기·실행
+- 시리얼에 쓰면 당장 포트는 열리지만 USB 재연결 시 **다시 풀림** → 가능하면 `dialout` / udev
+
+```bash
+sudo chmod 777 /dev/ttyACM0   # 임시
+# 읽기·쓰기만 전부 허용이면 666 (실행 비트 없음)
+```
+
+### 헷갈리기 쉬운 점
+
+| 하고 싶은 일 | 쓸 것 |
+|--------------|--------|
+| 스크립트 실행 | `chmod +x` 또는 **`chmod 755`** |
+| 시리얼 임시 개방 | `chmod 666` / `777` (또는 dialout·udev) |
+| `+x`만으로 ttyACM 열기 | ❌ 안 됨 (장치는 읽기/쓰기 필요) |
+
+```bash
+ls -l script.sh /dev/ttyACM0
+# -rwxr-xr-x  → 755, 실행 가능 스크립트
+# crw-rw---- 1 root dialout → dialout이면 시리얼 OK
+```
+
+---
+
+## 5. 빌드 · 실행
+
+```bash
+cd ~/ros2_ws
+colcon build --symlink-install
+
+# 실패 시 클린 빌드
+rm -rf build install log
+colcon build --symlink-install
+
+source install/setup.bash
+ros2 launch launch_pkg main.launch.py
+
+# 가중치·저속 예
+ros2 launch launch_pkg main.launch.py model:=best.pt drive_speed:=50
+ros2 launch launch_pkg main.launch.py model:=best.pt device:=cuda:0 drive_speed:=60
+```
+
+데이터 수집:
+
+```bash
+cd ~/ros2_ws
+python3 src/data_collection/data_collection.py
+```
+
+수집 키: `w/s` 속도 · `a/d` 조향 · `r` 리셋 · `c` 캡처 · `v` 녹화 · `f` 종료
+
+---
+
+## 6. 디버그 (토픽)
+
+```bash
+ros2 topic list
+ros2 topic hz /image_raw
+ros2 topic echo /detections --once
+ros2 topic echo /topic_control_signal
+ros2 topic echo /yolov8_lane_info
+ros2 node list
+```
+
+---
+
+## 7. Git (팀 작업)
+
+```bash
+cd ~/ros2_ws
+git status
+git pull
+git add -A
+git commit -m "메시지"
+git push
+```
+
+실차 후보 `.pt`는 [`camera_perception_pkg/.../weights/`](../src/camera_perception_pkg/camera_perception_pkg/weights/)에 둔다 ([team/yolo-weights.md](team/yolo-weights.md)). 원격 push는 팀 합의 후(용량·LFS).
+
+---
+
+## 안전 한 줄
+
+조교 확인 전 배터리 OFF · SMPS **12.0V** · 시리얼 모니터 끄고 ROS/수집 · 핫플러그로 장치명 꼬이지 않게 USB 정리
