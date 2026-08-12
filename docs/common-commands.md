@@ -1,7 +1,7 @@
 # 자주 쓰는 명령어
 
 실차·개발 때 터미널에 자주 치는 명령만 모았다.  
-짧은 치트시트: [team/cheat-sheet.md](team/cheat-sheet.md) · HW 부팅: [team/hw-boot.md](team/hw-boot.md)
+짧은 치트시트: [team/cheat-sheet.md](team/cheat-sheet.md) · HW 부팅: [team/hw-boot.md](team/hw-boot.md) · 소단위 디버그: [team/debug-and-incremental-test.md](team/debug-and-incremental-test.md)
 
 실차 노트북은 **Ubuntu 22.04 + ROS2 Humble 네이티브** 기준이다 (Docker 안 씀).  
 교육장 경로 `~/ros2_ws` ≈ 이 워크스페이스의 `H-Mobility-Autonomous-Advanced-Course/`.
@@ -164,10 +164,6 @@ colcon build --symlink-install
 
 source install/setup.bash
 ros2 launch launch_pkg main.launch.py
-
-# 가중치·저속 예
-ros2 launch launch_pkg main.launch.py model:=best.pt drive_speed:=50
-ros2 launch launch_pkg main.launch.py model:=best.pt device:=cuda:0 drive_speed:=60
 ```
 
 데이터 수집:
@@ -181,7 +177,99 @@ python3 src/data_collection/data_collection.py
 
 ---
 
-## 6. 디버그 (토픽)
+## 6. YOLO 가중치 스왑 · 검증 (자주 씀)
+
+후보 `.pt`는 레포에 포함됨. 상세·순위: [team/yolo-weights.md](team/yolo-weights.md)
+
+```bash
+# 경로 한 번만
+W=$HOME/ros2_ws/src/camera_perception_pkg/camera_perception_pkg/weights
+ls "$W"/*.pt
+```
+
+### 6-1. 테스트 순서 (파일만 바꿔 재런치)
+
+```bash
+# 1순위
+ros2 launch launch_pkg main.launch.py \
+  model:=$W/teamop_best.pt device:=cuda:0 drive_speed:=50
+
+# 2 → 3 → 3b → 4 (안 되면 다음)
+# model:=$W/youngsangc_best.pt
+# model:=$W/1taekim_best.pt
+# model:=$W/1taekim_ti_best.pt
+# model:=$W/cms1575_best.pt   # 느릴 수 있음 (~52MB)
+
+# 백업
+# model:=$W/hlhl_best.pt
+# model:=$W/hlhl_best_new.pt
+```
+
+### 6-2. 저속 · threshold 조절
+
+```bash
+ros2 launch launch_pkg main.launch.py \
+  model:=$W/teamop_best.pt device:=cuda:0 drive_speed:=50
+
+ros2 launch launch_pkg main.launch.py \
+  model:=$W/teamop_best.pt device:=cuda:0 drive_speed:=40 threshold:=0.4
+
+ros2 launch launch_pkg main.launch.py \
+  model:=$W/teamop_best.pt device:=cuda:0 drive_speed:=60
+```
+
+### 6-3. 정지 검출 합격 체크 (매 가중치마다)
+
+```bash
+ros2 topic hz /image_raw
+ros2 topic echo /detections --once          # lane2 마스크 · traffic_light?
+ros2 topic echo /yolov8_lane_info --once    # 타겟점 나오는지
+ros2 topic echo /topic_control_signal --once
+```
+
+시각화 노드가 떠 있으면 RViz/`yolov8_visualizer`로 마스크 확인.  
+통과 기준: `lane2` 세그 + `/yolov8_lane_info` 타겟점 → 저속 1바퀴.
+
+**Colab 재학습/파인튜닝은 위 드롭인이 조명·각도에서 깨질 때만** (같은 Kingo로 밤샘 학습은 이득 거의 없음).  
+정의·실패 시트·워크플로: [team/yolo-weights.md §4](team/yolo-weights.md).
+
+### 6-4. 소단위 스테이지 (serial 없이 먼저)
+
+상세: [team/debug-and-incremental-test.md](team/debug-and-incremental-test.md)
+
+```bash
+# 1) 카메라만
+ros2 launch launch_pkg camera_only.launch.py cam_num:=0
+
+# 2) C920e — 포커스 잠금, AE/AWB auto (전부 픽스하지 말 것)
+./scripts/c920_setup.sh match_train /dev/video0
+
+# 3) 인지 (모터 없음)
+ros2 launch launch_pkg perception_debug.launch.py \
+  model:=$W/teamop_best.pt device:=cuda:0 cam_num:=0
+
+# 4) IPM 트랙바 (인지 launch 뜬 채)
+ros2 run debug_pkg bev_calibrator_node   # p=출력 s=저장
+
+# 5) 세션 bag
+./scripts/run_session.sh
+
+# 6) 폐루프 + HUD
+ros2 launch launch_pkg main.launch.py \
+  model:=$W/teamop_best.pt device:=cuda:0 cam_num:=0 drive_speed:=50
+ros2 launch launch_pkg debug_overlay.launch.py
+
+# 7) 라이다 장착
+ros2 launch launch_pkg lidar_debug.launch.py
+
+./scripts/topic_rates.sh
+python3 tools/dump_bev.py /tmp/bev.png
+python3 tools/dump_roi.py /tmp/roi.png
+```
+
+---
+
+## 7. 디버그 (토픽)
 
 ```bash
 ros2 topic list
@@ -194,7 +282,7 @@ ros2 node list
 
 ---
 
-## 7. Git (팀 작업)
+## 8. Git (팀 작업)
 
 ```bash
 cd ~/ros2_ws

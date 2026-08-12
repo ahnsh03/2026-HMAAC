@@ -67,6 +67,8 @@ class MotionPlanningNode(Node):
 
         # 퍼블리셔 설정
         self.publisher = self.create_publisher(MotionCommand, self.pub_topic, self.qos_profile)
+        self.debug_pub = self.create_publisher(String, 'control_debug', self.qos_profile)
+        self._last_reason = 'init'
 
         # 타이머 설정
         self.timer = self.create_timer(self.timer_period, self.timer_callback)
@@ -93,6 +95,7 @@ class MotionPlanningNode(Node):
             self.steering_command = 0 
             self.left_speed_command = 0 
             self.right_speed_command = 0 
+            self._last_reason = 'lidar_stop'
 
         elif self.traffic_light_data is not None and self.traffic_light_data.data == 'Red':
             # 빨간색 신호등을 감지한 경우
@@ -108,9 +111,11 @@ class MotionPlanningNode(Node):
                         self.steering_command = 0 
                         self.left_speed_command = 0 
                         self.right_speed_command = 0
+                        self._last_reason = 'red_stop'
         else:
             if self.path_data is None:
                 self.steering_command = 0
+                self._last_reason = 'no_path'
             else:
                 target_slope = DMFL.calculate_slope_between_points(self.path_data[-10], self.path_data[-1])
                 
@@ -120,6 +125,7 @@ class MotionPlanningNode(Node):
                     self.steering_command = -self.steer_max
                 else:
                     self.steering_command = 0
+                self._last_reason = f'path slope={target_slope:.2f}'
 
 
             self.left_speed_command = self.drive_speed
@@ -137,6 +143,14 @@ class MotionPlanningNode(Node):
         motion_command_msg.left_speed = self.left_speed_command
         motion_command_msg.right_speed = self.right_speed_command
         self.publisher.publish(motion_command_msg)
+        dbg = String()
+        tl = self.traffic_light_data.data if self.traffic_light_data is not None else 'none'
+        lidar = int(bool(self.lidar_data.data)) if self.lidar_data is not None else -1
+        dbg.data = (
+            f"reason={self._last_reason} steer={self.steering_command} "
+            f"L={self.left_speed_command} R={self.right_speed_command} tl={tl} lidar={lidar}"
+        )
+        self.debug_pub.publish(dbg)
 
 def main(args=None):
     rclpy.init(args=args)

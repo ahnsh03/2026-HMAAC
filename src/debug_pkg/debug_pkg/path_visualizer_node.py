@@ -49,7 +49,10 @@ class PathVisualizerNode(Node):
 
     def roi_image_callback(self, msg: Image):
         try:
-            self.roi_image = self.cv_bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+            img = self.cv_bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
+            if len(img.shape) == 2:
+                img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+            self.roi_image = img
         except Exception as e:
             self.get_logger().error(f"Failed to convert ROI image: {str(e)}")
 

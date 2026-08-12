@@ -26,6 +26,14 @@ colcon build --symlink-install
 # 실패 시: rm -rf build install log && colcon build --symlink-install
 
 W=$HOME/ros2_ws/src/camera_perception_pkg/camera_perception_pkg/weights
+# 소단위 (모터 OFF) — 상세: debug-and-incremental-test.md
+ros2 launch launch_pkg camera_only.launch.py cam_num:=0
+./scripts/c920_setup.sh match_train /dev/video0
+ros2 launch launch_pkg perception_debug.launch.py \
+  model:=$W/teamop_best.pt device:=cuda:0 cam_num:=0
+ros2 run debug_pkg bev_calibrator_node
+./scripts/run_session.sh
+# 폐루프
 ros2 launch launch_pkg main.launch.py \
   model:=$W/teamop_best.pt device:=cuda:0 drive_speed:=50
 # 교체: youngsangc_best.pt → 1taekim_best.pt → 1taekim_ti_best.pt → cms1575_best.pt
@@ -33,7 +41,7 @@ python3 src/data_collection/data_collection.py
 ```
 
 `main.launch.py`: Stage1에 **serial_sender 활성**. 신호등·라이다는 미션 시 주석 해제.  
-가이드: [repo-structure-and-realcar-guide.md](repo-structure-and-realcar-guide.md) · [yolo-weights.md](yolo-weights.md)
+가이드: [repo-structure-and-realcar-guide.md](repo-structure-and-realcar-guide.md) · [yolo-weights.md](yolo-weights.md) · [debug-and-incremental-test.md](debug-and-incremental-test.md)
 
 ## 가중치 스왑 · 정지 검출
 

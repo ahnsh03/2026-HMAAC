@@ -39,6 +39,7 @@ docs/
     repo-structure-and-realcar-guide.md
     tomorrow-prep.md · hw-boot.md
     yolo-weights.md · external-references.md · lowspeed-tuning.md
+    debug-and-incremental-test.md
     notebooks/kingo_car.ipynb
     cheat-sheet.md
 ```
@@ -56,6 +57,7 @@ docs/
 - [내일 실차 재개 체크리스트](team/tomorrow-prep.md)
 - [HW 부팅 (장치·시리얼·SMPS)](team/hw-boot.md)
 - [YOLO 가중치 적용](team/yolo-weights.md)
+- [소단위 디버그 · 시각화 · 로깅](team/debug-and-incremental-test.md)
 - [공개 참고 레포 · 자료](team/external-references.md)
 - [저속 튜닝 · 미션](team/lowspeed-tuning.md)
 - [명령/핀/키맵 치트시트](team/cheat-sheet.md)

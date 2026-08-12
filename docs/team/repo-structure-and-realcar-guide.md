@@ -2,7 +2,7 @@
 
 목적: 코드를 “어디에 손대면 차가 나가는지”만 잡고, 실차에서 바로 실험할 수 있게 머리 속 지도를 그린다.
 
-관련: [tomorrow-prep.md](tomorrow-prep.md) · [cheat-sheet.md](cheat-sheet.md) · [yolo-weights.md](yolo-weights.md) · [external-references.md](external-references.md) · [lowspeed-tuning.md](lowspeed-tuning.md)
+관련: [tomorrow-prep.md](tomorrow-prep.md) · [cheat-sheet.md](cheat-sheet.md) · [yolo-weights.md](yolo-weights.md) · [debug-and-incremental-test.md](debug-and-incremental-test.md) · [external-references.md](external-references.md) · [lowspeed-tuning.md](lowspeed-tuning.md)
 
 ---
 
@@ -94,7 +94,7 @@ ros2 topic echo /topic_control_signal
 | `serial_communication_pkg` | MotionCommand → Arduino    |
 | `lidar_perception_pkg`     | 스캔·장애물 Bool (종료 정지·미션)     |
 | `interfaces_pkg`           | 커스텀 메시지                    |
-| `debug_pkg`                | 시각화                        |
+| `debug_pkg`                | 시각화 · IPM 트랙바 · HUD · 라이다 top-down · 마커 ([debug-and-incremental-test](debug-and-incremental-test.md)) |
 | `control/`                 | Arduino `driving.ino` 등    |
 | `data_collection/`         | YOLO 학습용 프레임/영상 수집         |
 
@@ -151,10 +151,13 @@ ros2 topic echo /topic_control_signal
 안 되면 Colab+Roboflow [`notebooks/kingo_car.ipynb`](notebooks/kingo_car.ipynb).  
 정지 상태에서 마스크가 붙는지 먼저 확인.
 
-### Step C — Launch 실차 고리
+### Step C — 소단위 검증 후 Launch
 
-`main.launch.py`에서 `serial_sender`**는 실차 주행용으로 활성화**되어 있다.  
-신호등·라이다는 미션 단계에서 주석 해제.
+**한 번에 main 을 켜지 말 것.** 순서: 카메라 → C920e → 인지(serial OFF) → IPM 트랙바 → 저속 폐루프.  
+상세 명령: [debug-and-incremental-test.md](debug-and-incremental-test.md)
+
+`main.launch.py`에서 `serial_sender`**는 실차 주행용으로 활성화**되어 있다 (`data_source` 기본=`camera`).  
+신호등·라이다는 미션 단계에서 주석 해제. 시각화는 `debug_overlay.launch.py`.
 
 시리얼 모니터(Arduino IDE)와 ROS `serial_sender`를 **동시에** 열지 말 것.
 

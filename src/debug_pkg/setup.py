@@ -20,8 +20,12 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'path_visualizer_node = debug_pkg.path_visualizer_node:main',	
-            'yolov8_visualizer_node = debug_pkg.yolov8_visualizer_node:main',	
+            'path_visualizer_node = debug_pkg.path_visualizer_node:main',
+            'yolov8_visualizer_node = debug_pkg.yolov8_visualizer_node:main',
+            'bev_calibrator_node = debug_pkg.bev_calibrator_node:main',
+            'control_hud_node = debug_pkg.control_hud_node:main',
+            'lidar_scan_visualizer_node = debug_pkg.lidar_scan_visualizer_node:main',
+            'marker_node = debug_pkg.marker_node:main',
         ],
     },
 )

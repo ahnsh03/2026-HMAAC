@@ -7,6 +7,12 @@
   <maintainer email="whaihong@g.skku.edu">hhk-laptop</maintainer>
   <license>TODO: License declaration</license>
 
+  <depend>cv_bridge</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>interfaces_pkg</depend>
+  <exec_depend>camera_perception_pkg</exec_depend>
+
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>
