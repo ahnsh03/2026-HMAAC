@@ -14,6 +14,7 @@ SUB_DETECTION_TOPIC_NAME = "detections"
 SUB_PATH_TOPIC_NAME = "path_planning_result"
 SUB_TRAFFIC_LIGHT_TOPIC_NAME = "yolov8_traffic_light_info"
 SUB_LIDAR_OBSTACLE_TOPIC_NAME = "lidar_obstacle_info"
+SUB_FORCE_START_TOPIC_NAME = "force_start"
 PUB_TOPIC_NAME = "topic_control_signal"
 
 #----------------------------------------------
@@ -32,6 +33,7 @@ class MotionPlanningNode(Node):
         self.sub_path_topic = self.declare_parameter('sub_lane_topic', SUB_PATH_TOPIC_NAME).value
         self.sub_traffic_light_topic = self.declare_parameter('sub_traffic_light_topic', SUB_TRAFFIC_LIGHT_TOPIC_NAME).value
         self.sub_lidar_obstacle_topic = self.declare_parameter('sub_lidar_obstacle_topic', SUB_LIDAR_OBSTACLE_TOPIC_NAME).value
+        self.sub_force_start_topic = self.declare_parameter('sub_force_start_topic', SUB_FORCE_START_TOPIC_NAME).value
         self.pub_topic = self.declare_parameter('pub_topic', PUB_TOPIC_NAME).value
         
         self.timer_period = self.declare_parameter('timer', TIMER).value
@@ -55,7 +57,9 @@ class MotionPlanningNode(Node):
         self.right_speed_command = 0
 
         # 간략 미션: 첫 Green만 보고 출발. 한 번 출발하면 되돌리지 않음.
-        self.require_green_start = self.declare_parameter('require_green_start', True).value
+        # require_green_start는 매 주기 get_parameter (ros2 param set 로 구간 테스트 가능).
+        self.declare_parameter('require_green_start', True)
+        self.require_green_start = True
         self.started = False
         self.green_hits = 0
         self.need_green_hits = self.declare_parameter('need_green_hits', NEED_GREEN_HITS).value
@@ -66,6 +70,7 @@ class MotionPlanningNode(Node):
         self.path_sub = self.create_subscription(PathPlanningResult, self.sub_path_topic, self.path_callback, self.qos_profile)
         self.traffic_light_sub = self.create_subscription(String, self.sub_traffic_light_topic, self.traffic_light_callback, self.qos_profile)
         self.lidar_sub = self.create_subscription(Bool, self.sub_lidar_obstacle_topic, self.lidar_callback, self.qos_profile)
+        self.force_start_sub = self.create_subscription(Bool, self.sub_force_start_topic, self.force_start_callback, self.qos_profile)
 
         # 퍼블리셔 설정
         self.publisher = self.create_publisher(MotionCommand, self.pub_topic, self.qos_profile)
@@ -84,8 +89,15 @@ class MotionPlanningNode(Node):
 
     def lidar_callback(self, msg: Bool):
         self.lidar_data = msg
+
+    def force_start_callback(self, msg: Bool):
+        if not msg.data:
+            return
+        self.started = True
+        self.get_logger().warn('force_start: wait_green latch released')
         
     def timer_callback(self):
+        self.require_green_start = bool(self.get_parameter('require_green_start').value)
         color = self.traffic_light_data.data if self.traffic_light_data is not None else 'None'
 
         if self.require_green_start and not self.started:
@@ -127,8 +139,13 @@ class MotionPlanningNode(Node):
             # require_green_start=False 일 때만 기존 적색 근접 정지.
             # 간략 미션(래치 ON)에서는 출발 후 이 분기를 타지 않음.
             for detection in self.detection_data.detections:
-                if detection.class_name=='traffic_light':
+                if detection.class_name == 'traffic_light':
+                    # bbox 박스 정보 모두 남겨둠 (x_min, x_max, y_min, y_max)
+                    x_min = int(detection.bbox.center.position.x - detection.bbox.size.x / 2)
+                    x_max = int(detection.bbox.center.position.x + detection.bbox.size.x / 2)
+                    y_min = int(detection.bbox.center.position.y - detection.bbox.size.y / 2)
                     y_max = int(detection.bbox.center.position.y + detection.bbox.size.y / 2)
+         
 
                     if y_max < 150:
                         # 신호등 위치에 따른 정지명령 결정
