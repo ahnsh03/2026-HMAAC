@@ -1,7 +1,8 @@
 # 제어기 튜닝 — 분석과 실험 순서
 
 목적: 팀원이 `best_psh`에 신호등을 추가학습하는 동안, **차선 추종만** `best_psh` ↔ `teamop`으로 맞춘다.  
-인지 비교: [teamop-vs-team14.md](teamop-vs-team14.md) · 저속 체크리스트: [lowspeed-tuning.md](lowspeed-tuning.md)
+인지 비교: [teamop-vs-team14.md](teamop-vs-team14.md) · 저속 체크리스트: [lowspeed-tuning.md](lowspeed-tuning.md)  
+**제어 숫자보다 먼저:** 초록 출발 게이트. 설계만 → [wait-green.md](wait-green.md). 코드는 아직 없음.
 
 `race`에는 검증된 주행 코드만 넣는다. 이 문서는 **아이디어와 실험 순서**다. 코드를 바꾸기 전에 같은 속도로 A/B부터 한다.
 
