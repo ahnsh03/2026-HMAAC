@@ -25,7 +25,7 @@
 | Colab에서 다시 학습 | 가능. `model=yolov8s-seg.pt`(스크래치) 또는 `model=teamop_best.pt`(파인튜닝) |
 | 파인튜닝에 Kingo 쓰기 | **가능·권장**. 드롭인이 커튼/카메라각에서 약하면 Kingo(+현장 소수 장)로 `teamop_best.pt`를 추가 epoch |
 
-정리: Kingo는 “아직 아무도 학습 안 한 raw”가 아니라 **라벨드 학습셋**. 그 순수 학습본에 가까운 것은 `team14`이고, 실차에서는 병합본 `teamop`이 더 낫다. 팀원 `best_psh.pt`(yolo11s-seg)는 차선이 더 좋고 신호등이 약하다. 재학습은 팀원 TL FT + 실패 코너 프레임이 우선이다.
+정리: Kingo는 “아직 아무도 학습 안 한 raw”가 아니라 **라벨드 학습셋**. 그 순수 학습본에 가까운 것은 `team14`이고, 실차에서는 병합본 `teamop`이 더 낫다. 팀원 `best_psh.pt`(yolo11s-seg)는 차선이 더 좋고 신호등이 약하다. `best_psh_v2.pt`는 **신호등 전용 1클래스**(`Traffic`)라 주행 드롭인 금지 — 아래 §3.1.
 
 ### 지금 Colab으로 갈 필요 있나? (결론)
 
@@ -81,6 +81,7 @@ F23(`lane-center` 등)은 공식 `lane_info_extractor`와 **비호환** → 드�
 |:---:|------|-------------|------|
 | 1 | `best_psh.pt` | `lane2`, `traffic_light` | 팀원 yolo11s-seg. **차선 추종 A/B**. TL 약함 |
 | 1 | `teamop_best.pt` | `lane2`, `object`, `traffic_light` | 공개 기준점. team14보다 실차에서 우위 |
+| — | `best_psh_v2.pt` | **`Traffic`만** | **주행 드롭인 금지.** §3.1 |
 | — | `team14_best.pt` | `box`, `lane2`, … | **쓰지 않음.** Kingo-only + 클래스 오염 |
 | 3 | `1taekim_best.pt` | `lane2`, `traffic_light` | conf 낮음·마스크 번짐. 백업 |
 | 4 | `youngsangc_best.pt` | 동일 | |
@@ -99,6 +100,24 @@ ros2 launch launch_pkg main.launch.py \
 ```
 
 제어까지 같이 볼 때: [controller-tuning.md](controller-tuning.md). team14를 다시 넣지 말 것.
+
+### 3.1 `best_psh_v2.pt` — 신호등만 좋아지고 차선은 없음
+
+race `f3db687`에 파일은 올렸다. **`model:=` 로 바꾸지 말 것.**
+
+| | `best_psh.pt` | `best_psh_v2.pt` |
+|--|---------------|------------------|
+| names | `lane2`, `traffic_light` | **`Traffic`만** |
+| 학습셋 (ckpt) | 2클래스 | `/content/Traffic-Dataset-2` |
+| lane2 검출 (200장, conf=0.5) | **98.5%** (3 miss) | **0%** |
+| TL 박스 (이름 리맵) | `traffic_light` 25장 | `Traffic` **49장** (v1 25장 전부 포함, +24) |
+| 히트 시 평균 conf | 0.77 | 0.90 |
+
+같은 200장에서 **teamop** 은 `traffic_light` 44장(conf 0.85). 포함 관계: **psh ⊂ teamop ⊂ v2**. teamop이 잡은 44장은 v2가 전부 다시 잡고(+5). 파이프라인이 `traffic_light`만 보면 지금 드롭인 최다 박스는 여전히 teamop.
+
+파이프라인은 `lane2` / `traffic_light` 문자열로 고른다. v2를 넣으면 `/yolov8_lane_info`와 HSV 입력이 둘 다 끊긴다. 오프라인으로 `Traffic`을 세면 신호등 리콜은 약 2배이고 teamop(44장)보다도 박스가 많다.
+
+팀원에게: **`lane2` + `traffic_light` 이름을 유지한 2클래스 FT**를 달라고 할 것. 지금 v2는 보조 TL 모델 후보일 뿐 주행 가중치가 아니다.
 
 ### 정지 상태 통과 기준
 
