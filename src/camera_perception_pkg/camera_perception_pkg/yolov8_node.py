@@ -53,12 +53,12 @@ class Yolov8Node(LifecycleNode):
         
         #---------------Variable Setting---------------
         # 딥러닝 모델 pt 파일명 작성
-        self.declare_parameter("model", "yolov8m.pt")
-        # self.declare_parameter("model", "best.pt")
+        # self.declare_parameter("model", "yolov8m.pt")
+        self.declare_parameter("model", "best.pt")
         
         # 추론 하드웨어 선택 (cpu / gpu) 
-        self.declare_parameter("device", "cpu")
-        # self.declare_parameter("device", "cuda:0")
+        # self.declare_parameter("device", "cpu")
+        self.declare_parameter("device", "cuda:0")
         #----------------------------------------------
         
         self.declare_parameter("threshold", 0.5)

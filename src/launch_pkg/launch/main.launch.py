@@ -57,10 +57,10 @@ def generate_launch_description():
             name='path_planner_node',
             output='screen'
         ),
-        # Node(
-        #     package='serial_communication_pkg',
-        #     executable='serial_sender_node',
-        #     name='serial_sender_node',
-        #     output='screen'
-        # ),
+        Node(
+            package='serial_communication_pkg',
+            executable='serial_sender_node',
+            name='serial_sender_node',
+            output='screen'
+        ),
     ])
