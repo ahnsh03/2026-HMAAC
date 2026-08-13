@@ -113,8 +113,8 @@ class MotionPlanningNode(Node):
                     self.steering_command = 0
 
 
-            self.left_speed_command = 100  # 예시 속도 값 (255가 최대 속도)
-            self.right_speed_command = 100  # 예시 속도 값 (255가 최대 속도)
+            self.left_speed_command = 70  # 예시 속도 값 (255가 최대 속도)
+            self.right_speed_command = 70  # 예시 속도 값 (255가 최대 속도)
 
 
 

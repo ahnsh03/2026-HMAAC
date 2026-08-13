@@ -15,6 +15,8 @@
 
 
 from typing import List, Dict
+import os
+from pathlib import Path
 
 import rclpy
 from rclpy.qos import QoSProfile
@@ -46,6 +48,51 @@ from interfaces_pkg.msg import DetectionArray
 from std_srvs.srv import SetBool
 
 
+def _workspace_root():
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if "reference" in parent.parts:
+            continue
+        if (parent / "src" / "camera_perception_pkg").is_dir() and (
+            parent / "src" / "launch_pkg"
+        ).is_dir():
+            return parent
+    for prefix in os.environ.get("COLCON_PREFIX_PATH", "").split(os.pathsep):
+        if not prefix:
+            continue
+        install_dir = Path(prefix).resolve()
+        if "reference" in install_dir.parts:
+            continue
+        if install_dir.name == "install" and (install_dir.parent / "src" / "camera_perception_pkg").is_dir():
+            return install_dir.parent
+    return None
+
+
+def resolve_model_path(model: str) -> str:
+    """cwd가 아니라 이 레포 ros2_ws 기준으로 가중치를 찾는다. best.pt를 먼저 쓴다."""
+    if os.path.isabs(model) and os.path.isfile(model):
+        return model
+    if os.path.isfile(model):
+        return os.path.abspath(model)
+
+    root = _workspace_root()
+    if root is None:
+        return model
+
+    basename = os.path.basename(model)
+    candidates = [
+        root / "best.pt",
+        root / basename,
+        root / model,
+        root / "weights" / "team14_best.pt",
+        root / "weights" / basename,
+    ]
+    for path in candidates:
+        if path.is_file():
+            return str(path)
+    return model
+
+
 class Yolov8Node(LifecycleNode):
 
     def __init__(self, **kwargs) -> None:
@@ -71,8 +118,10 @@ class Yolov8Node(LifecycleNode):
     def on_configure(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info(f'Configuring {self.get_name()}')
 
-        self.model = self.get_parameter(
-            "model").get_parameter_value().string_value
+        self.model = resolve_model_path(
+            self.get_parameter("model").get_parameter_value().string_value
+        )
+        self.get_logger().info(f"YOLO weights: {self.model}")
 
         self.device = self.get_parameter(
             "device").get_parameter_value().string_value
@@ -246,8 +295,6 @@ class Yolov8Node(LifecycleNode):
         return keypoints_list
 
     def image_cb(self, msg: Image) -> None:
-        print(msg.header)
-
         if self.enable:
 
             # convert image + predict

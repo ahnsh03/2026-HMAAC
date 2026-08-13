@@ -55,6 +55,7 @@ class Yolov8VisualizerNode(LifecycleNode):
         # params
         self.declare_parameter("image_reliability",
                                QoSReliabilityPolicy.RELIABLE)
+        self.declare_parameter("show_image", True)
 
         self.get_logger().info("Debug node created")
 
@@ -68,6 +69,7 @@ class Yolov8VisualizerNode(LifecycleNode):
             durability=QoSDurabilityPolicy.VOLATILE,
             depth=1
         )
+        self.show_image = self.get_parameter("show_image").get_parameter_value().bool_value
 
         # pubs
         self._dbg_pub = self.create_publisher(Image, "yolov8_visualized_img", 10)
@@ -290,12 +292,19 @@ class Yolov8VisualizerNode(LifecycleNode):
         self._bb_markers_pub.publish(bb_marker_array)
         self._kp_markers_pub.publish(kp_marker_array)
 
+        if self.show_image:
+            cv2.imshow("yolov8_visualized_img", cv_image)
+            cv2.waitKey(1)
+
 
 def main():
     rclpy.init()
     node = Yolov8VisualizerNode()
     node.trigger_configure()
     node.trigger_activate()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    finally:
+        node.destroy_node()
+        cv2.destroyAllWindows()
+        rclpy.shutdown()

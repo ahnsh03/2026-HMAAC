@@ -1,8 +1,32 @@
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
+import sys
+from pathlib import Path
+
+_LAUNCH_DIR = str(Path(__file__).resolve().parent)
+if _LAUNCH_DIR not in sys.path:
+    sys.path.insert(0, _LAUNCH_DIR)
+from workspace_paths import default_yolo_weights  # noqa: E402
+
 
 def generate_launch_description():
+    model = LaunchConfiguration('model')
+
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'model',
+            default_value=default_yolo_weights(),
+            description='YOLO weights path (absolute; default: ros2_ws/best.pt)',
+        ),
+        DeclareLaunchArgument(
+            'debug',
+            default_value='true',
+            description='YOLO/path OpenCV debug visualizer nodes',
+        ),
         Node(
             package='camera_perception_pkg',
             executable='image_publisher_node',
@@ -13,7 +37,8 @@ def generate_launch_description():
             package='camera_perception_pkg',
             executable='yolov8_node',
             name='yolov8_node',
-            output='screen'
+            output='screen',
+            parameters=[{'model': model}],
         ),
         Node(
             package='camera_perception_pkg',
@@ -62,5 +87,21 @@ def generate_launch_description():
             executable='serial_sender_node',
             name='serial_sender_node',
             output='screen'
+        ),
+        Node(
+            package='debug_pkg',
+            executable='yolov8_visualizer_node',
+            name='yolov8_visualizer_node',
+            output='screen',
+            condition=IfCondition(LaunchConfiguration('debug')),
+            parameters=[{'show_image': ParameterValue(LaunchConfiguration('debug'), value_type=bool)}],
+        ),
+        Node(
+            package='debug_pkg',
+            executable='path_visualizer_node',
+            name='path_visualizer_node',
+            output='screen',
+            condition=IfCondition(LaunchConfiguration('debug')),
+            parameters=[{'show_image': ParameterValue(LaunchConfiguration('debug'), value_type=bool)}],
         ),
     ])

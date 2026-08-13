@@ -32,6 +32,16 @@ class Yolov8InfoExtractor(Node):
         self.sub_topic = self.declare_parameter('sub_detection_topic', SUB_TOPIC_NAME).value
         self.pub_topic = self.declare_parameter('pub_topic', PUB_TOPIC_NAME).value
         self.show_image = self.declare_parameter('show_image', SHOW_IMAGE).value
+        # 교육 기본 IPM. bev_calibrator(카메라 이미지)로 측정한 값만 launch로 덮어쓴다.
+        self.src0_x = int(self.declare_parameter('src0_x', 238).value)
+        self.src0_y = int(self.declare_parameter('src0_y', 316).value)
+        self.src1_x = int(self.declare_parameter('src1_x', 402).value)
+        self.src1_y = int(self.declare_parameter('src1_y', 313).value)
+        self.src2_x = int(self.declare_parameter('src2_x', 501).value)
+        self.src2_y = int(self.declare_parameter('src2_y', 476).value)
+        self.src3_x = int(self.declare_parameter('src3_x', 155).value)
+        self.src3_y = int(self.declare_parameter('src3_y', 476).value)
+        self.cutting_idx = int(self.declare_parameter('cutting_idx', 300).value)
 
         self.cv_bridge = CvBridge()
 
@@ -57,10 +67,15 @@ class Yolov8InfoExtractor(Node):
 
         (h, w) = (lane2_edge_image.shape[0], lane2_edge_image.shape[1]) #(480, 640)
         dst_mat = [[round(w * 0.3), round(h * 0.0)], [round(w * 0.7), round(h * 0.0)], [round(w * 0.7), h], [round(w * 0.3), h]]
-        src_mat = [[238, 316],[402, 313], [501, 476], [155, 476]]
-        
+        src_mat = [
+            [self.src0_x, self.src0_y],
+            [self.src1_x, self.src1_y],
+            [self.src2_x, self.src2_y],
+            [self.src3_x, self.src3_y],
+        ]
+
         lane2_bird_image = CPFL.bird_convert(lane2_edge_image, srcmat=src_mat, dstmat=dst_mat)
-        roi_image = CPFL.roi_rectangle_below(lane2_bird_image, cutting_idx=300)
+        roi_image = CPFL.roi_rectangle_below(lane2_bird_image, cutting_idx=self.cutting_idx)
 
         if self.show_image:
             cv2.imshow('lane2_edge_image', lane2_edge_image)
