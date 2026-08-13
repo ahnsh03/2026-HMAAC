@@ -19,6 +19,7 @@ from cv_bridge import CvBridge
 from rclpy.node import Node
 from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
 from sensor_msgs.msg import Image
+from .node_shutdown import close_cv_windows, install_shutdown
 
 DEFAULT_SRC = [(238, 316), (402, 313), (501, 476), (155, 476)]
 CORNER_LABELS = ("0 far-L", "1 far-R", "2 near-R", "3 near-L")
@@ -144,6 +145,7 @@ class BevCalibratorNode(Node):
 
 
 def main(args=None):
+    install_shutdown(close_cv=True)
     rclpy.init(args=args)
     node = BevCalibratorNode()
     try:
@@ -157,12 +159,13 @@ def main(args=None):
                 node.print_params()
             if key == ord("s"):
                 node.save_json()
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, SystemExit):
         pass
     finally:
-        cv2.destroyAllWindows()
+        close_cv_windows()
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ from rclpy.qos import QoSDurabilityPolicy
 from rclpy.qos import QoSReliabilityPolicy
 
 from .lib import lidar_perception_func_lib as LPFL
+from .node_shutdown import install_shutdown
 
 #---------------Variable Setting---------------
 SUB_TOPIC_NAME = 'lidar_processed'
@@ -53,10 +54,10 @@ class ObjectDetection(Node):
             depth=1
         )
 
-        # 전방 0–90°, 80 cm 이내 물체
+        # 전방 0–90°, 110 cm 이내 물체
         self.declare_parameter('lane1_start_angle', 0)
         self.declare_parameter('lane1_end_angle', 90)
-        self.declare_parameter('stop_range_max', 0.80)
+        self.declare_parameter('stop_range_max', 1.10)
 
         self.subscriber = self.create_subscription(LaserScan, SUB_TOPIC_NAME, self.lidar_callback, self.qos_profile)
         self.publisher = self.create_publisher(Bool, PUB_TOPIC_NAME, self.qos_profile)
@@ -89,11 +90,17 @@ class ObjectDetection(Node):
 
 
 def main(args=None):
+    install_shutdown()
     rclpy.init(args=args)
     object_detection_node = ObjectDetection()
-    rclpy.spin(object_detection_node)
-    object_detection_node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(object_detection_node)
+    except (KeyboardInterrupt, SystemExit):
+        pass
+    finally:
+        object_detection_node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':

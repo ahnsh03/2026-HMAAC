@@ -20,12 +20,15 @@ TOPICS=(
   /lidar_raw
   /lidar_processed
   /lidar_obstacle_info
+  /lidar_lane1_min
   /detections
   /yolov8_lane_info
   /yolov8_traffic_light_info
+  /lane_control_info
   /roi_image
   /path_planning_result
   /topic_control_signal
+  /finish_stop_reason
 )
 
 if [[ "${SKIP_VISUALIZED:-0}" != "1" ]]; then

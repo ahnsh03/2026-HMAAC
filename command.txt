@@ -28,15 +28,15 @@ source ~/team14/ros2_ws/install/setup.bash
 # ros2 launch launch_pkg perception_debug.launch.py model:=$W/1taekim_best.pt device:=cuda:0 cam_num:=0 $SRC
 # ros2 launch launch_pkg perception_debug.launch.py model:=$W/cms1575_best.pt device:=cuda:0 cam_num:=0 $SRC
 
-# --- 세션 bag (main 이 카메라·라이다·제어를 모두 기록) ---
-# 터미널 1:
+# --- 주행 + bag (main 한 번에 기록, 기본 record:=true) ---
 #   ros2 launch launch_pkg main.launch.py
-# 터미널 2:
-#   source /opt/ros/humble/setup.bash && source install/setup.bash
-#   ./scripts/topic_rates.sh
-#   MODEL=teamop_best.pt ./scripts/run_session.sh
-#   # 용량 줄이기: SKIP_VISUALIZED=1 ./scripts/run_session.sh
+#   ros2 launch launch_pkg main.launch.py require_green_start:=false drive_speed:=50
+#   ros2 launch launch_pkg main.launch.py skip_visualized:=true
+#   ros2 launch launch_pkg main.launch.py record:=false   # bag 없이 주행만
 # 재생 (serial_sender 끄고):
-#   ros2 bag play ~/hmaac_logs/<STAMP>/bag/eval
+#   ros2 bag play ~/team14/ros2_ws/bags/main_<STAMP>/eval
+# 예전 두 터미널 방식:
+#   ros2 launch launch_pkg main.launch.py record:=false
+#   ./scripts/run_session.sh
 
 python3 src/data_collection/data_collection.py

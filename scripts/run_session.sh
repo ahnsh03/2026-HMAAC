@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # 시도 폴더를 만들고 bag 을 켠다. Ctrl+C 로 bag 과 함께 종료.
 #
+# 기본은 main.launch.py 의 record:=true 로 같이 기록한다.
+# 이 스크립트는 main 을 record:=false 로 켠 뒤 따로 bag 을 쓸 때만 쓴다.
+#
 #   source /opt/ros/humble/setup.bash && source ~/ros2_ws/install/setup.bash
-#   # 다른 터미널에서 먼저: ros2 launch launch_pkg main.launch.py
+#   # 다른 터미널에서 먼저: ros2 launch launch_pkg main.launch.py record:=false
 #   ./scripts/run_session.sh
 set -euo pipefail
 

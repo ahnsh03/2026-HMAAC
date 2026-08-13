@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 from cv_bridge import CvBridge
 from .imgmsg import numpy_to_imgmsg
+from .node_shutdown import close_cv_windows, install_shutdown
 
 #---------------Variable Setting---------------
 SUB_ROI_IMAGE_TOPIC = "roi_image"        # ROI 이미지 토픽
@@ -99,15 +100,16 @@ class PathVisualizerNode(Node):
 
 
 def main(args=None):
+    install_shutdown(close_cv=True)
     rclpy.init(args=args)
     node = PathVisualizerNode()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, SystemExit):
         print("\n\nshutdown\n\n")
     finally:
+        close_cv_windows()
         node.destroy_node()
-        cv2.destroyAllWindows()
         if rclpy.ok():
             rclpy.shutdown()
 

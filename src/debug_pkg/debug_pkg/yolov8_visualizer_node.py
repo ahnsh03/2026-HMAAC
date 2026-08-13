@@ -33,6 +33,7 @@ from rclpy.lifecycle import LifecycleState
 from cv_bridge import CvBridge
 from ultralytics.utils.plotting import Annotator, colors
 from .imgmsg import numpy_to_imgmsg
+from .node_shutdown import close_cv_windows, install_shutdown
 
 from sensor_msgs.msg import Image
 from visualization_msgs.msg import Marker
@@ -341,16 +342,17 @@ class Yolov8VisualizerNode(LifecycleNode):
 
 
 def main():
+    install_shutdown(close_cv=True)
     rclpy.init()
     node = Yolov8VisualizerNode()
     node.trigger_configure()
     node.trigger_activate()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, SystemExit):
         pass
     finally:
+        close_cv_windows()
         node.destroy_node()
-        cv2.destroyAllWindows()
         if rclpy.ok():
             rclpy.shutdown()

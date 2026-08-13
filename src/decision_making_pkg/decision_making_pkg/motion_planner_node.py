@@ -7,9 +7,10 @@ from rclpy.qos import QoSHistoryPolicy
 from rclpy.qos import QoSDurabilityPolicy
 from rclpy.qos import QoSReliabilityPolicy
 
-from std_msgs.msg import String, Bool, Float32
+from std_msgs.msg import String, Bool, Float32, Float32MultiArray
 from interfaces_pkg.msg import PathPlanningResult, DetectionArray, MotionCommand
 from .lib import decision_making_func_lib as DMFL
+from .node_shutdown import install_shutdown
 
 #---------------Variable Setting---------------
 SUB_DETECTION_TOPIC_NAME = "detections"
@@ -17,6 +18,7 @@ SUB_PATH_TOPIC_NAME = "path_planning_result"
 SUB_TRAFFIC_LIGHT_TOPIC_NAME = "yolov8_traffic_light_info"
 SUB_LIDAR_OBSTACLE_TOPIC_NAME = "lidar_obstacle_info"
 SUB_LIDAR_LANE1_MIN_TOPIC_NAME = "lidar_lane1_min"
+SUB_LANE_CONTROL_TOPIC_NAME = "lane_control_info"
 SUB_FORCE_START_TOPIC_NAME = "force_start"
 PUB_TOPIC_NAME = "topic_control_signal"
 PUB_FINISH_REASON_TOPIC_NAME = "finish_stop_reason"
@@ -27,9 +29,19 @@ TIMER = 0.1
 NEED_GREEN_HITS = 3
 NEED_FINISH_HITS = 3
 
-# 라이다 단일: 0–90° 최소거리 ≤ 0.80 m. 카메라는 이 실험에서 쓰지 않음.
+# 라이다 단일: 0–90° 최소거리 ≤ 1.10 m. 카메라는 이 실험에서 쓰지 않음.
 LIDAR_STOP_RMIN = 0.12
-LIDAR_STOP_RMAX = 0.80
+LIDAR_STOP_RMAX = 1.00
+
+# 실차 P: 속도 250, k=0.028에서 점선을 밟지 않음. EMA/slew는 끈 상태가 기본.
+DRIVE_SPEED = 250
+STEER_MAX = 7
+STEER_K = 0.028
+STEER_ALPHA = 1.0
+STEER_RATE = 7.0
+VEHICLE_CENTER_X = 320.0
+LANE_TIMEOUT = 0.35
+LANE_LOST_SPEED = 30
 
 
 def _in_closed(value, lo, hi):
@@ -46,6 +58,9 @@ class MotionPlanningNode(Node):
         self.sub_lidar_obstacle_topic = self.declare_parameter('sub_lidar_obstacle_topic', SUB_LIDAR_OBSTACLE_TOPIC_NAME).value
         self.sub_lidar_lane1_min_topic = self.declare_parameter(
             'sub_lidar_lane1_min_topic', SUB_LIDAR_LANE1_MIN_TOPIC_NAME
+        ).value
+        self.sub_lane_control_topic = self.declare_parameter(
+            'sub_lane_control_topic', SUB_LANE_CONTROL_TOPIC_NAME
         ).value
         self.sub_force_start_topic = self.declare_parameter('sub_force_start_topic', SUB_FORCE_START_TOPIC_NAME).value
         self.pub_topic = self.declare_parameter('pub_topic', PUB_TOPIC_NAME).value
@@ -67,10 +82,16 @@ class MotionPlanningNode(Node):
         self.traffic_light_data = None
         self.lidar_data = None
         self.lane1_min = None
+        self.lane_center_x = None
+        self.lane_mask_area = 0.0
+        self.lane_control_stamp = None
 
         self.steering_command = 0
         self.left_speed_command = 0
         self.right_speed_command = 0
+        self.filtered_steer = 0.0
+        self.limited_steer = 0.0
+        self.control_debug = 'init'
 
         self.declare_parameter('require_green_start', True)
         self.require_green_start = True
@@ -82,6 +103,15 @@ class MotionPlanningNode(Node):
         self.declare_parameter('need_finish_hits', NEED_FINISH_HITS)
         self.declare_parameter('lidar_stop_rmin', LIDAR_STOP_RMIN)
         self.declare_parameter('lidar_stop_rmax', LIDAR_STOP_RMAX)
+        self.declare_parameter('use_lane_surface_control', True)
+        self.declare_parameter('drive_speed', DRIVE_SPEED)
+        self.declare_parameter('steer_max', STEER_MAX)
+        self.declare_parameter('steer_k', STEER_K)
+        self.declare_parameter('steer_alpha', STEER_ALPHA)
+        self.declare_parameter('steer_rate', STEER_RATE)
+        self.declare_parameter('vehicle_center_x', VEHICLE_CENTER_X)
+        self.declare_parameter('lane_timeout', LANE_TIMEOUT)
+        self.declare_parameter('lane_lost_speed', LANE_LOST_SPEED)
 
         self.finish_hits = 0
 
@@ -99,6 +129,12 @@ class MotionPlanningNode(Node):
         )
         self.lane1_min_sub = self.create_subscription(
             Float32, self.sub_lidar_lane1_min_topic, self.lane1_min_callback, self.qos_profile
+        )
+        self.lane_control_sub = self.create_subscription(
+            Float32MultiArray,
+            self.sub_lane_control_topic,
+            self.lane_control_callback,
+            self.qos_profile,
         )
         self.force_start_sub = self.create_subscription(
             Bool, self.sub_force_start_topic, self.force_start_callback, self.qos_profile
@@ -122,6 +158,15 @@ class MotionPlanningNode(Node):
 
     def lane1_min_callback(self, msg: Float32):
         self.lane1_min = float(msg.data)
+
+    def lane_control_callback(self, msg: Float32MultiArray):
+        if len(msg.data) < 2:
+            return
+        center_x = float(msg.data[0])
+        self.lane_mask_area = float(msg.data[1])
+        if math.isfinite(center_x):
+            self.lane_center_x = center_x
+            self.lane_control_stamp = self.get_clock().now()
 
     def force_start_callback(self, msg: Bool):
         if not msg.data:
@@ -151,6 +196,9 @@ class MotionPlanningNode(Node):
         self.steering_command = 0
         self.left_speed_command = 0
         self.right_speed_command = 0
+        self.filtered_steer = 0.0
+        self.limited_steer = 0.0
+        self.control_debug = 'stop_reset'
 
     def _publish(self):
         motion_command_msg = MotionCommand()
@@ -232,32 +280,93 @@ class MotionPlanningNode(Node):
             f"left_speed: {self.left_speed_command}, "
             f"right_speed: {self.right_speed_command} "
             f"hits={self.finish_hits}/{need_hits} "
-            f"src={source} tl={int(has_tl)} front_min={front_min:.3f}"
+            f"src={source} tl={int(has_tl)} front_min={front_min:.3f} "
+            f"{self.control_debug}"
         )
         self._publish_reason(source)
         self._publish()
 
     def _follow_path(self):
+        drive_speed = int(self.get_parameter('drive_speed').value)
+        if bool(self.get_parameter('use_lane_surface_control').value):
+            if self._lane_control_is_fresh():
+                self._follow_lane_surface()
+                self.left_speed_command = drive_speed
+                self.right_speed_command = drive_speed
+                return
+
+            lane_lost_speed = int(self.get_parameter('lane_lost_speed').value)
+            self.filtered_steer = 0.0
+            self.limited_steer = 0.0
+            self.steering_command = 0
+            self.left_speed_command = lane_lost_speed
+            self.right_speed_command = lane_lost_speed
+            self.control_debug = (
+                f"ctrl=lane_lost center={self.lane_center_x} "
+                f"area={self.lane_mask_area:.0f}"
+            )
+            return
+
         if self.path_data is None:
             self.steering_command = 0
+            self.control_debug = 'ctrl=bang no_path'
         else:
             target_slope = DMFL.calculate_slope_between_points(self.path_data[-10], self.path_data[-1])
             if target_slope > 0:
-                self.steering_command = 7
+                self.steering_command = int(self.get_parameter('steer_max').value)
             elif target_slope < 0:
-                self.steering_command = -7
+                self.steering_command = -int(self.get_parameter('steer_max').value)
             else:
                 self.steering_command = 0
-        self.left_speed_command = 70
-        self.right_speed_command = 70
+            self.control_debug = f'ctrl=bang slope={target_slope:.2f}'
+        self.left_speed_command = drive_speed
+        self.right_speed_command = drive_speed
+
+    def _lane_control_is_fresh(self):
+        if self.lane_center_x is None or self.lane_control_stamp is None:
+            return False
+        timeout = float(self.get_parameter('lane_timeout').value)
+        age = (self.get_clock().now() - self.lane_control_stamp).nanoseconds * 1e-9
+        return age <= timeout
+
+    def _follow_lane_surface(self):
+        center_x = float(self.lane_center_x)
+        vehicle_center_x = float(self.get_parameter('vehicle_center_x').value)
+        steer_k = float(self.get_parameter('steer_k').value)
+        steer_max = float(self.get_parameter('steer_max').value)
+        alpha = float(self.get_parameter('steer_alpha').value)
+        rate = float(self.get_parameter('steer_rate').value)
+
+        alpha = min(max(alpha, 0.0), 1.0)
+        rate = max(rate, 0.0)
+        error_px = center_x - vehicle_center_x
+        raw_steer = min(max(steer_k * error_px, -steer_max), steer_max)
+        self.filtered_steer = (
+            (1.0 - alpha) * self.filtered_steer + alpha * raw_steer
+        )
+        delta = min(
+            max(self.filtered_steer - self.limited_steer, -rate),
+            rate,
+        )
+        self.limited_steer = min(
+            max(self.limited_steer + delta, -steer_max),
+            steer_max,
+        )
+        self.steering_command = int(round(self.limited_steer))
+        self.control_debug = (
+            f"ctrl=surface center={center_x:.1f} area={self.lane_mask_area:.0f} "
+            f"err={error_px:.1f} raw={raw_steer:.2f} "
+            f"ema={self.filtered_steer:.2f} limited={self.limited_steer:.2f}"
+        )
 
 
 def main(args=None):
+    install_shutdown()
     rclpy.init(args=args)
     node = MotionPlanningNode()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, SystemExit):
         print("\n\nshutdown\n\n")
     finally:
         node.destroy_node()

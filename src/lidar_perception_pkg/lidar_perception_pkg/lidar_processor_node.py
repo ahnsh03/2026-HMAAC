@@ -8,6 +8,7 @@ from rclpy.qos import QoSDurabilityPolicy
 from rclpy.qos import QoSReliabilityPolicy
 
 from .lib import lidar_perception_func_lib as LPFL
+from .node_shutdown import install_shutdown
 
 #---------------Variable Setting---------------
 # Subscribe할 토픽 이름
@@ -50,11 +51,17 @@ class LidarSensorDataProcessor(Node):
         self.get_logger().info(f'Received scan with {len(ranges)} ranges and {len(intensities)} intensities')
 
 def main(args=None):
+    install_shutdown()
     rclpy.init(args=args)
     lidar_processor = LidarSensorDataProcessor()
-    rclpy.spin(lidar_processor)
-    lidar_processor.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(lidar_processor)
+    except (KeyboardInterrupt, SystemExit):
+        pass
+    finally:
+        lidar_processor.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

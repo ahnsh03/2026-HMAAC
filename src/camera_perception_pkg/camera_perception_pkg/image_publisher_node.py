@@ -14,6 +14,7 @@ import os
 import numpy as np
 
 from .lib.imgmsg import numpy_to_imgmsg
+from .node_shutdown import close_cv_windows, install_shutdown
 
 #---------------Variable Setting---------------
 # Publish할 토픽 이름
@@ -178,19 +179,20 @@ class ImagePublisherNode(Node):
                 self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Reset video to the first frame
     
 def main(args=None):
+    install_shutdown(close_cv=True)
     rclpy.init(args=args)
     node = ImagePublisherNode()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, SystemExit):
         print("\n\nshutdown\n\n")
-        pass
-    node.destroy_node()
-    if getattr(node, 'cap', None) is not None and node.cap.isOpened():
-        node.cap.release()
-    cv2.destroyAllWindows()
-    if rclpy.ok():
-        rclpy.shutdown()
+    finally:
+        if getattr(node, 'cap', None) is not None and node.cap.isOpened():
+            node.cap.release()
+        close_cv_windows()
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
   
 if __name__ == '__main__':
     main()

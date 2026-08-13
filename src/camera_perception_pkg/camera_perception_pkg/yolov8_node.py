@@ -42,6 +42,7 @@ from interfaces_pkg.msg import BoundingBox2D
 from interfaces_pkg.msg import Mask
 from interfaces_pkg.msg import KeyPoint2D
 from interfaces_pkg.msg import KeyPoint2DArray
+from .node_shutdown import install_shutdown
 from interfaces_pkg.msg import Detection
 from interfaces_pkg.msg import DetectionArray
 
@@ -356,10 +357,16 @@ class Yolov8Node(LifecycleNode):
 
 
 def main():
+    install_shutdown()
     rclpy.init()
     node = Yolov8Node()
     node.trigger_configure()
     node.trigger_activate()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    except (KeyboardInterrupt, SystemExit):
+        pass
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
