@@ -20,7 +20,7 @@
 
 - [ ] Wi-Fi (`SKKU_GUEST`) · 노트북 비번 `1234`
 - [ ] `cd ~/ros2_ws && git pull` (팀 원격 `ahnsh03/2026-HMAAC` · 브랜치 `2026`)
-- [ ] 가중치 8개 확인 (아래 §실차 pull)
+- [ ] 가중치 10개 확인 (`best_psh.pt` 포함, 아래 §실차 pull)
 - [ ] `source /opt/ros/humble/setup.bash && source install/setup.bash`
 - [ ] `ls /dev/video* ttyACM* ttyUSB*` → 기록 시트와 비교, 변경 시 파라미터 수정
 - [ ] `sudo chmod 777 /dev/ttyACM0` (장치명에 맞게)
@@ -36,14 +36,19 @@ cd ~/ros2_ws
 git pull
 git log -1 --oneline
 
-# 가중치 (이미 레포에 커밋됨 · ~194MB)
+# 가중치 (Course weights/ · ~237MB)
 W=src/camera_perception_pkg/camera_perception_pkg/weights
 ls -lh $W/*.pt
-# 있어야 할 파일 8개:
-#   teamop_best.pt  youngsangc_best.pt
+# 있어야 할 파일 10개:
+#   teamop_best.pt          # 주행 기본 · 차선+신호등
+#   best_psh.pt             # 차선 A/B · 신호등 약함
+#   team14_best.pt          # 파이프라인 확인만 · 주행 제외
+#   youngsangc_best.pt
 #   1taekim_best.pt  1taekim_ti_best.pt
 #   cms1575_best.pt
 #   hlhl_best.pt  hlhl_best_new.pt  hlhl_traffic_light.pt
+# race weights/ 의 best_psh_v2.pt 는 Traffic 전용 · 주행 금지
+# 테스트 순서: team/yolo-weights.md §3
 
 # pull 후 새 launch/debug 노드 반영
 source /opt/ros/humble/setup.bash

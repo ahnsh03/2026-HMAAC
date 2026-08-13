@@ -30,14 +30,16 @@ W=$HOME/ros2_ws/weights
 ros2 launch launch_pkg camera_only.launch.py cam_num:=0
 ./scripts/c920_setup.sh match_train /dev/video0
 ros2 launch launch_pkg perception_debug.launch.py \
-  model:=$W/best_psh.pt device:=cuda:0 cam_num:=0
-# A/B: model:=$W/teamop_best.pt
+  model:=$W/teamop_best.pt device:=cuda:0 cam_num:=0
+# 차선만 A/B: model:=$W/best_psh.pt
+# 파이프라인만: model:=$W/team14_best.pt
+# best_psh_v2 = Traffic 전용, 차선 없음, 주행 금지
 ros2 run debug_pkg bev_calibrator_node
 ./scripts/run_session.sh
 # 폐루프 (race는 drive_speed 없을 수 있음)
 ros2 launch launch_pkg main.launch.py \
-  model:=$W/best_psh.pt device:=cuda:0
-# A/B: model:=$W/teamop_best.pt
+  model:=$W/teamop_best.pt device:=cuda:0
+# 차선만 A/B: model:=$W/best_psh.pt
 python3 src/data_collection/data_collection.py
 ```
 
@@ -49,7 +51,9 @@ python3 src/data_collection/data_collection.py
 
 ```bash
 W=$HOME/ros2_ws/weights
-# 1) best_psh ↔ 2) teamop   (team14 제외)
+# 1) teamop (기본)  2) best_psh (차선만 A/B)
+# team14는 주행 제외. best_psh_v2는 차선 없음.
+# 상세·라벨 일람: yolo-weights.md §2.3·§3
 ros2 topic echo /detections --once          # lane2 마스크?
 ros2 topic echo /yolov8_lane_info --once    # 타겟점?
 ```

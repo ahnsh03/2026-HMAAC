@@ -146,7 +146,7 @@ ros2 topic echo /topic_control_signal
 
 ### Step B — 데이터 → YOLO ([yolo-weights](yolo-weights.md))
 
-**기본:** Course [`weights/`](../../src/camera_perception_pkg/camera_perception_pkg/weights/)의 `teamop_best.pt` 등 드롭인 (라벨링 생략).  
+**기본:** Course [`weights/`](../../src/camera_perception_pkg/camera_perception_pkg/weights/)의 **`teamop_best.pt`**. `best_psh.pt`는 차선만 A/B(신호등 약함). `best_psh_v2`는 차선 없음. `team14_best.pt`는 파이프라인 확인만. 순서: [yolo-weights §3](yolo-weights.md).  
 참고 레포 URL·clone: [external-references](external-references.md).  
 안 되면 Colab+Roboflow [`notebooks/kingo_car.ipynb`](notebooks/kingo_car.ipynb).  
 정지 상태에서 마스크가 붙는지 먼저 확인.

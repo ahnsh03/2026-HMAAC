@@ -14,12 +14,13 @@
 
 | 가중치 | 실차에서 | 이유 |
 |--------|----------|------|
-| **teamop_best** | **공개 드롭인 1순위** | 학습셋이 병합본이고, 코너에서 lane2가 안 빠지며 conf 여유가 큼 |
+| **teamop_best** | **주행 기본 1순위** | 차선+신호등. 학습셋이 병합본이고, 코너에서 lane2가 안 빠지며 conf 여유가 큼 |
 | team14_best | 쓰지 말 것 | Kingo만 학습 + 클래스 이름이 공식 스키마와 다름 + 코너 미검출 |
 | 1taekim_best | 백업 | 공식 2클래스이지만 conf가 0.5 근처, 마스크가 번짐 |
-| **best_psh** (팀원) | **차선 추종 A/B용** | 차선은 teamop보다 낫다는 실차 체감. 신호등은 약함 → 팀원이 TL FT 중 |
+| **best_psh** (팀원) | **차선만 A/B** | 차선은 좋지만 **신호등이 약함** |
+| **best_psh_v2** | 쓰지 말 것 | 신호등은 나아지나 **차선이 없음** |
 
-지금 할 일: 팀원 TL 추가학습이 끝날 때까지 **`best_psh` ↔ `teamop`만 바꿔** 제어를 맞춘다. team14는 A/B에 넣지 않는다.
+지금 할 일: **`teamop`을 기본 `model:=`로 쓴다.** 차선만 더 볼 때 `best_psh`. team14·v2는 주행에 넣지 않는다.
 
 ---
 
@@ -149,13 +150,13 @@ race 작업트리 기준 가중치는 레포 루트 `weights/`.
 ```bash
 W=~/ros2_ws/weights   # 또는 레포 루트 weights/
 
-# 차선 추종 (제어 튜닝 기본)
-ros2 launch launch_pkg perception_debug.launch.py \
-  model:=$W/best_psh.pt device:=cuda:0
-
-# 공개 기준점
+# 주행 기본
 ros2 launch launch_pkg perception_debug.launch.py \
   model:=$W/teamop_best.pt device:=cuda:0
+
+# 차선만 A/B (신호등 약함)
+ros2 launch launch_pkg perception_debug.launch.py \
+  model:=$W/best_psh.pt device:=cuda:0
 ```
 
 폐루프는 [controller-tuning.md](controller-tuning.md). team14는 위 명령에 넣지 않는다.

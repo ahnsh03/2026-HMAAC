@@ -190,19 +190,21 @@ ls "$W"/*.pt
 ### 6-1. 테스트 순서 (파일만 바꿔 재런치)
 
 ```bash
-# 1순위
+# 1순위 주행 기본
 ros2 launch launch_pkg main.launch.py \
   model:=$W/teamop_best.pt device:=cuda:0 drive_speed:=50
-
-# 2 → 3 → 3b → 4 (안 되면 다음)
-# model:=$W/youngsangc_best.pt
-# model:=$W/1taekim_best.pt
-# model:=$W/1taekim_ti_best.pt
-# model:=$W/cms1575_best.pt   # 느릴 수 있음 (~52MB)
+# 차선만 A/B
+# model:=$W/best_psh.pt
 
 # 백업
-# model:=$W/hlhl_best.pt
-# model:=$W/hlhl_best_new.pt
+# model:=$W/youngsangc_best.pt
+# model:=$W/1taekim_ti_best.pt
+# model:=$W/1taekim_best.pt
+# model:=$W/cms1575_best.pt   # 느릴 수 있음 (~52MB)
+# team14_best.pt 는 파이프라인 확인만 (주행 제외)
+# best_psh_v2.pt / hlhl_* 는 차선 드롭인 금지
+
+# 순위 근거: team/yolo-weights.md §3
 ```
 
 ### 6-2. 저속 · threshold 조절

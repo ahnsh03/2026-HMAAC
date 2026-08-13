@@ -113,11 +113,11 @@ psh는 teamop이 못 본 불을 추가로 잡지 못했다. 차선은 psh가 비
 
 가져갈 운영:
 
-1. **정지 상태, 출발선**에서 `model:=best_psh`와 `teamop` 각각  
+1. **정지 상태, 출발선**에서 기본 `model:=teamop`으로  
    `ros2 topic echo /yolov8_traffic_light_info`  
    적·녹이 나오는지 확인한다. (detector 켠 뒤)
-2. 출발선에서 psh가 `None`만 내면, **게이트 검증만 teamop**으로 한다. 차선 추종 A/B는 started 이후 문제다.
-3. 팀원 TL FT가 오면 같은 게이트 코드에 psh만 갈아 끼운다.
+2. `best_psh`는 신호등이 약하니 게이트 검증에 쓰지 않는다. 차선만 A/B할 때 켠다.
+3. `best_psh_v2`는 차선이 없으니 `model:=`에 넣지 않는다.
 
 색은 HSV가 담당한다. YOLO가 `traffic_light` 박스만 주면 된다. 클래스에 `green`을 넣지 말 것.
 

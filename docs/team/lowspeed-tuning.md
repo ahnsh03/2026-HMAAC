@@ -16,8 +16,8 @@
 cd ~/ros2_ws
 source /opt/ros/humble/setup.bash && source install/setup.bash
 colcon build --symlink-install --packages-select decision_making_pkg launch_pkg
-ros2 launch launch_pkg main.launch.py model:=weights/best_psh.pt
-# A/B: model:=weights/teamop_best.pt
+ros2 launch launch_pkg main.launch.py model:=weights/teamop_best.pt
+# 차선만 A/B: model:=weights/best_psh.pt
 # race는 drive_speed 파라미터가 없을 수 있음 (코드 70 고정). 상세: controller-tuning.md
 ```
 

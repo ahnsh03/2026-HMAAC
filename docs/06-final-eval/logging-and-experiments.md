@@ -68,9 +68,10 @@ python3 src/data_collection/data_collection.py
 ### YOLO 가중치 스왑 (인지 실패)
 
 드롭인 테스트·실패 기록·파인튜닝 정의: **[team/yolo-weights.md §4](../team/yolo-weights.md)**  
-한 줄: 여러 `.pt` 비교 → **실패 지점 기록** → 최우수 가중치 + 실패 장면 로깅·라벨 → FT.
+한 줄: 여러 `.pt` 비교 → **실패 지점 기록** → 최우수 가중치 + 실패 장면 로깅·라벨 → FT.  
+순서: 주행 기본 `teamop`. 차선만 A/B `best_psh`. `team14`는 파이프라인 확인만. `best_psh_v2`는 차선 없음.
 
-- [ ] 가중치별 정지 `lane2` / 타겟점 / 신호
+- [ ] 가중치별 정지 `lane2` / 타겟점 / 신호 (`best_psh`는 YOLO11 로드부터)
 - [ ] 깨지는 구간·증상(끊김·편향 등) 시트에 남김
 - [ ] 실패 구간 bag 또는 `data_collection` `v` 경로 기록
 

@@ -190,7 +190,7 @@ ros2 topic echo /yolov8_lane_info --once
 # 창: yolov8_visualized_img, lane imshow (edge/BEV/ROI)
 ```
 
-통과: `lane2` 마스크 + 타겟점. 실패 시 [yolo-weights.md](yolo-weights.md) 순서로 `.pt`만 교체하고 **시트에 실패 지점 기록**.
+통과: `lane2` 마스크 + 타겟점. 실패 시 [yolo-weights.md §3](yolo-weights.md) (`teamop` 기본, 차선만 `best_psh`)로 `.pt`만 교체하고 **시트에 실패 지점 기록**. IPM은 `.pt`마다 다시 맞추지 말 것.
 
 ### 5-4. IPM 트랙바
 

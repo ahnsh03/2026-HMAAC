@@ -1,6 +1,6 @@
 # 제어기 튜닝 — 분석과 실험 순서
 
-목적: 팀원이 `best_psh`에 신호등을 추가학습하는 동안, **차선 추종만** `best_psh` ↔ `teamop`으로 맞춘다.  
+목적: **주행 기본은 `teamop`.** `best_psh`는 차선만 A/B(신호등 약함). `best_psh_v2`는 차선이 없어 쓰지 않는다.  
 인지 비교: [teamop-vs-team14.md](teamop-vs-team14.md) · 저속 체크리스트: [lowspeed-tuning.md](lowspeed-tuning.md)  
 **제어 숫자보다 먼저:** 초록 출발 게이트. 설계만 → [wait-green.md](wait-green.md). 코드는 아직 없음.
 
@@ -60,13 +60,13 @@ ino `MAX_STEERING_STEP = 7`. 소프트웨어에서 8을 보내도 보드가 자�
 ```bash
 W=~/ros2_ws/weights
 
-# 1) 차선이 더 잘 붙는 쪽
-ros2 launch launch_pkg main.launch.py \
-  model:=$W/best_psh.pt device:=cuda:0
-
-# 2) 공개 기준점 (race는 drive_speed 파라미터가 없을 수 있음 → 코드의 70)
+# 1) 주행 기본 (차선+신호등)
 ros2 launch launch_pkg main.launch.py \
   model:=$W/teamop_best.pt device:=cuda:0
+
+# 2) 차선만 A/B (신호등 약함. race는 drive_speed 없을 수 있음 → 코드의 70)
+ros2 launch launch_pkg main.launch.py \
+  model:=$W/best_psh.pt device:=cuda:0
 ```
 
 같은 코스(직선 → 첫 코너 → S자)를 두 번. 기록은 아래 시트.
@@ -158,7 +158,7 @@ team14는 이 A/B에 넣지 않는다 ([teamop-vs-team14.md](teamop-vs-team14.md
 
 - 속도·조향 한계만 파라미터화하는 것은 제어 튜닝에 바로 이득이다 (`2026` motion_planner 참고).
 - arctan / path 제거 / 미션 FSM은 `race`에 검증 없이 넣지 않는다.
-- 가중치 파일만 바꾸는 것은 이미 `model:=`로 된다. 기본값을 `best_psh.pt`로 하드코딩하지 말 것 — A/B가 사라진다.
+- 가중치 파일만 바꾸는 것은 이미 `model:=`로 된다. 기본값은 `teamop_best.pt`. `best_psh`는 차선 A/B용으로만.
 
 디버그 (모터 OFF 가능):
 
