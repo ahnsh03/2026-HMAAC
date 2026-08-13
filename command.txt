@@ -1,5 +1,7 @@
 ls /dev/video* /dev/ttyACM* /dev/ttyUSB*
 sudo chmod 777 /dev/ttyACM0
+# 라이다 쓸 때:
+# sudo chmod 777 /dev/ttyUSB0
 
 # --- 실차 인지 테스트 (모터 OFF, serial 주석 유지) ---
 # cd ~/ros2_ws
@@ -22,5 +24,16 @@ sudo chmod 777 /dev/ttyACM0
 # ros2 launch launch_pkg perception_debug.launch.py model:=$W/youngsangc_best.pt device:=cuda:0 cam_num:=0 $SRC
 # ros2 launch launch_pkg perception_debug.launch.py model:=$W/1taekim_best.pt device:=cuda:0 cam_num:=0 $SRC
 # ros2 launch launch_pkg perception_debug.launch.py model:=$W/cms1575_best.pt device:=cuda:0 cam_num:=0 $SRC
+
+# --- 세션 bag (main 이 카메라·라이다·제어를 모두 기록) ---
+# 터미널 1:
+#   ros2 launch launch_pkg main.launch.py
+# 터미널 2:
+#   source /opt/ros/humble/setup.bash && source install/setup.bash
+#   ./scripts/topic_rates.sh
+#   MODEL=best_psh.pt ./scripts/run_session.sh
+#   # 용량 줄이기: SKIP_VISUALIZED=1 ./scripts/run_session.sh
+# 재생 (serial_sender 끄고):
+#   ros2 bag play ~/hmaac_logs/<STAMP>/bag/eval
 
 python3 src/data_collection/data_collection.py

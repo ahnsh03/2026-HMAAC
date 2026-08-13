@@ -32,11 +32,6 @@ def generate_launch_description():
             default_value='true',
             description='Wait for Green (or /force_start) before driving. false = section test, drive immediately',
         ),
-        DeclareLaunchArgument(
-            'enable_traffic_light',
-            default_value='true',
-            description='Start traffic_light_detector_node. false = inject /yolov8_traffic_light_info by hand',
-        ),
         Node(
             package='camera_perception_pkg',
             executable='image_publisher_node',
@@ -61,26 +56,25 @@ def generate_launch_description():
             executable='traffic_light_detector_node',
             name='traffic_light_detector_node',
             output='screen',
-            condition=IfCondition(LaunchConfiguration('enable_traffic_light')),
         ),
-        # Node(
-        #     package='lidar_perception_pkg',
-        #     executable='lidar_publisher_node',
-        #     name='lidar_publisher_node',
-        #     output='screen'
-        # ),
-        # Node(
-        #     package='lidar_perception_pkg',
-        #     executable='lidar_processor_node',
-        #     name='lidar_processor_node',
-        #     output='screen'
-        # ),
-        # Node(
-        #     package='lidar_perception_pkg',
-        #     executable='lidar_obstacle_detector_node',
-        #     name='lidar_obstacle_detector_node',
-        #     output='screen'
-        # ),
+        Node(
+            package='lidar_perception_pkg',
+            executable='lidar_publisher_node',
+            name='lidar_publisher_node',
+            output='screen',
+        ),
+        Node(
+            package='lidar_perception_pkg',
+            executable='lidar_processor_node',
+            name='lidar_processor_node',
+            output='screen',
+        ),
+        Node(
+            package='lidar_perception_pkg',
+            executable='lidar_obstacle_detector_node',
+            name='lidar_obstacle_detector_node',
+            output='screen',
+        ),
         Node(
             package='decision_making_pkg',
             executable='motion_planner_node',
@@ -102,7 +96,7 @@ def generate_launch_description():
             package='serial_communication_pkg',
             executable='serial_sender_node',
             name='serial_sender_node',
-            output='screen'
+            output='screen',
         ),
         Node(
             package='debug_pkg',
