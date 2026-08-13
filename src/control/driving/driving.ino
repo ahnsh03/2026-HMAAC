@@ -10,8 +10,11 @@ const int FORWARD_LEFT_1 = 6;
 const int FORWARD_LEFT_2 =7;
 const int POT = A2;
 
-// 조향 속도 상수
-const int STEERING_SPEED = 128;
+// 조향 속도 및 PWM 제한 상수 (Smooth Proportional Control)
+const int MIN_STEERING_PWM = 80;   // 정지 마찰 극복 최소 PWM
+const int MAX_STEERING_PWM = 200;  // 최대 조향 PWM 속도
+const int DEADBAND_RESISTANCE = 4; // 저항 오차 사불감대
+const float KP_STEER = 3.5;        // 비례 게인
 
 // 가변저항 값 범위
 const int resistance_most_left = 938;
@@ -29,8 +32,8 @@ unsigned long lastCommandTime = 0; // 마지막 명령 처리 시간
 const unsigned int COMMAND_INTERVAL = 50; // 명령 처리 간 최소 대기 시간(ms)
 
 // 함수 선언
-void steerRight();
-void steerLeft();
+void steerRight(int speed);
+void steerLeft(int speed);
 void maintainSteering();
 void setLeftMotorSpeed(int speed);
 void setRightMotorSpeed(int speed);
@@ -65,13 +68,23 @@ void loop() {
         resistance = analogRead(POT);
         mapped_resistance = map(resistance, resistance_most_left, resistance_most_right, -MAX_STEERING_STEP, MAX_STEERING_STEP + 1);
 
-        // 조향 상태에 따라 동작 제어
-        if (mapped_resistance == angle) {
+        // 목표 조향각(angle)에 해당하는 목표 포텐셔미터 저항값 계산
+        int target_resistance = map(angle, -MAX_STEERING_STEP, MAX_STEERING_STEP, resistance_most_right, resistance_most_left);
+        int res_error = target_resistance - resistance;
+        int abs_error = abs(res_error);
+
+        // 비례(P) PWM 제어 적용
+        if (abs_error <= DEADBAND_RESISTANCE) {
             maintainSteering();
-        } else if (mapped_resistance > angle) {
-            steerLeft();
         } else {
-            steerRight();
+            int pwm_speed = (int)(MIN_STEERING_PWM + KP_STEER * abs_error);
+            pwm_speed = constrain(pwm_speed, MIN_STEERING_PWM, MAX_STEERING_PWM);
+
+            if (res_error > 0) {
+                steerLeft(pwm_speed);
+            } else {
+                steerRight(pwm_speed);
+            }
         }
 
         // 모터 속도 설정
@@ -83,15 +96,15 @@ void loop() {
     }
 }
 
-// 조향 제어 함수
-void steerRight() {
-    analogWrite(STEERING_1, STEERING_SPEED);
+// 조향 제어 함수 (가변 PWM 적용)
+void steerRight(int speed) {
+    analogWrite(STEERING_1, speed);
     analogWrite(STEERING_2, LOW);
 }
 
-void steerLeft() {
+void steerLeft(int speed) {
     analogWrite(STEERING_1, LOW);
-    analogWrite(STEERING_2, STEERING_SPEED);
+    analogWrite(STEERING_2, speed);
 }
 
 void maintainSteering() {

@@ -18,8 +18,11 @@ PUB_TOPIC_NAME = "topic_control_signal"
 
 # 저속 첫 주행 기본값 (launch: drive_speed:= / steer_max:= 로 덮어쓰기)
 # 문서: docs/team/lowspeed-tuning.md
-DEFAULT_DRIVE_SPEED = 60   # 0~255, 안정화 후 80~120 등으로 상향
+DEFAULT_DRIVE_SPEED = 60   # 0~255, 기본 속도
 DEFAULT_STEER_MAX = 7      # driving.ino MAX_STEERING_STEP 과 일치
+DEFAULT_MAX_SLOPE_ANGLE = 35.0  # steer_max에 해당하는 경로 기울기 각도(도)
+DEFAULT_SLOPE_DEADBAND = 2.0    # 이 각도 미만은 직진(조향 0) 사불감대
+DEFAULT_STRAIGHT_STEER_THRESHOLD = 1 # 조향 크기(절대값)이 이 이하일 때 직진 속도 적용
 #----------------------------------------------
 
 # 모션 플랜 발행 주기 (초) - 소수점 필요 (int형은 반영되지 않음)
@@ -39,6 +42,11 @@ class MotionPlanningNode(Node):
         self.timer_period = self.declare_parameter('timer', TIMER).value
         self.drive_speed = int(self.declare_parameter('drive_speed', DEFAULT_DRIVE_SPEED).value)
         self.steer_max = int(self.declare_parameter('steer_max', DEFAULT_STEER_MAX).value)
+        self.drive_speed_straight = int(self.declare_parameter('drive_speed_straight', self.drive_speed + 15).value)
+        self.drive_speed_corner = int(self.declare_parameter('drive_speed_corner', max(20, self.drive_speed - 15)).value)
+        self.max_slope_angle = float(self.declare_parameter('max_slope_angle', DEFAULT_MAX_SLOPE_ANGLE).value)
+        self.slope_deadband = float(self.declare_parameter('slope_deadband', DEFAULT_SLOPE_DEADBAND).value)
+        self.straight_steer_threshold = int(self.declare_parameter('straight_steer_threshold', DEFAULT_STRAIGHT_STEER_THRESHOLD).value)
 
         # QoS 설정
         self.qos_profile = QoSProfile(
@@ -73,7 +81,7 @@ class MotionPlanningNode(Node):
         # 타이머 설정
         self.timer = self.create_timer(self.timer_period, self.timer_callback)
         self.get_logger().info(
-            f'drive_speed={self.drive_speed}, steer_max={self.steer_max}'
+            f'drive_speed={self.drive_speed} (straight={self.drive_speed_straight}, corner={self.drive_speed_corner}), steer_max={self.steer_max}'
         )
 
     def detection_callback(self, msg: DetectionArray):
@@ -116,20 +124,35 @@ class MotionPlanningNode(Node):
             if self.path_data is None:
                 self.steering_command = 0
                 self._last_reason = 'no_path'
+                calculated_speed = self.drive_speed
             else:
                 target_slope = DMFL.calculate_slope_between_points(self.path_data[-10], self.path_data[-1])
                 
-                if target_slope > 0:
-                    self.steering_command = self.steer_max
-                elif target_slope < 0:
-                    self.steering_command = -self.steer_max
-                else:
+                if target_slope == 'inf':
                     self.steering_command = 0
-                self._last_reason = f'path slope={target_slope:.2f}'
+                    self._last_reason = 'path slope=inf'
+                else:
+                    abs_slope = abs(target_slope)
+                    if abs_slope < self.slope_deadband:
+                        self.steering_command = 0
+                    else:
+                        # 기울기에 비례하여 부드럽게 [-steer_max, +steer_max] 범위로 양자화
+                        steer_float = (target_slope / self.max_slope_angle) * self.steer_max
+                        clamped_steer = max(-self.steer_max, min(self.steer_max, round(steer_float)))
+                        self.steering_command = int(clamped_steer)
+                    self._last_reason = f'path slope={target_slope:.2f}'
 
+                # 직진/곡선 조향각에 따른 속도 가감속 로직
+                abs_steer = abs(self.steering_command)
+                if abs_steer <= self.straight_steer_threshold:
+                    calculated_speed = self.drive_speed_straight
+                else:
+                    steer_ratio = (abs_steer - self.straight_steer_threshold) / max(1, (self.steer_max - self.straight_steer_threshold))
+                    calculated_speed = int(self.drive_speed_straight - steer_ratio * (self.drive_speed_straight - self.drive_speed_corner))
+                    calculated_speed = max(self.drive_speed_corner, min(self.drive_speed_straight, calculated_speed))
 
-            self.left_speed_command = self.drive_speed
-            self.right_speed_command = self.drive_speed
+            self.left_speed_command = calculated_speed
+            self.right_speed_command = calculated_speed
 
 
 

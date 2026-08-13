@@ -28,6 +28,8 @@ def generate_launch_description():
     device = LaunchConfiguration("device")
     threshold = LaunchConfiguration("threshold")
     drive_speed = LaunchConfiguration("drive_speed")
+    drive_speed_straight = LaunchConfiguration("drive_speed_straight")
+    drive_speed_corner = LaunchConfiguration("drive_speed_corner")
     steer_max = LaunchConfiguration("steer_max")
     data_source = LaunchConfiguration("data_source")
     cam_num = LaunchConfiguration("cam_num")
@@ -67,7 +69,17 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "drive_speed",
             default_value="60",
-            description="Left/right wheel PWM for low-speed first runs (0-255)",
+            description="Left/right wheel PWM base speed (0-255)",
+        ),
+        DeclareLaunchArgument(
+            "drive_speed_straight",
+            default_value="75",
+            description="Straight driving wheel PWM speed (0-255)",
+        ),
+        DeclareLaunchArgument(
+            "drive_speed_corner",
+            default_value="45",
+            description="Corner driving wheel PWM speed (0-255)",
         ),
         DeclareLaunchArgument(
             "steer_max",
@@ -153,6 +165,8 @@ def generate_launch_description():
             output="screen",
             parameters=[{
                 "drive_speed": ParameterValue(drive_speed, value_type=int),
+                "drive_speed_straight": ParameterValue(drive_speed_straight, value_type=int),
+                "drive_speed_corner": ParameterValue(drive_speed_corner, value_type=int),
                 "steer_max": ParameterValue(steer_max, value_type=int),
             }],
         ),
