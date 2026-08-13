@@ -84,6 +84,7 @@ def generate_launch_description():
             executable="yolov8_visualizer_node",
             name="yolov8_visualizer_node",
             output="screen",
+            parameters=[{"show_image": True}],
         ),
         Node(
             package="decision_making_pkg",
@@ -96,5 +97,6 @@ def generate_launch_description():
             executable="path_visualizer_node",
             name="path_visualizer_node",
             output="screen",
+            parameters=[{"show_image": True}],
         ),
     ])

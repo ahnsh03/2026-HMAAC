@@ -104,7 +104,6 @@ def generate_launch_description():
             name='yolov8_visualizer_node',
             output='screen',
             condition=IfCondition(LaunchConfiguration('debug')),
-            parameters=[{'show_image': ParameterValue(LaunchConfiguration('debug'), value_type=bool)}],
         ),
         Node(
             package='debug_pkg',
@@ -112,6 +111,5 @@ def generate_launch_description():
             name='path_visualizer_node',
             output='screen',
             condition=IfCondition(LaunchConfiguration('debug')),
-            parameters=[{'show_image': ParameterValue(LaunchConfiguration('debug'), value_type=bool)}],
         ),
     ])
