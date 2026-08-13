@@ -74,9 +74,9 @@ git clone --depth 1 https://github.com/cms1575/autonomous_vehicle_SKKU.git
 1. [HW 부팅](hw-boot.md) — 장치·전원·시리얼
 2. **소단위 디버그** — 카메라 → C920e → 인지(serial OFF) → IPM 트랙바 ([debug-and-incremental-test](debug-and-incremental-test.md))
 3. **로깅 인프라** — `./scripts/run_session.sh` dry-run ([logging-and-experiments](../06-final-eval/logging-and-experiments.md))
-4. **신호등 / 랩 카운트** — 출발 적→녹 · **랩2 적 전환 여부** · 정면 통과로 랩 구분(색으로 세지 말 것)
-5. **정지 퓨전 실험** — 물체탐지 정석 + **규정집 정지 위치** · 출발점+30cm 차량 · FOV 상실·정차 cm
-6. **차선 강건성** — 속도–페널티 ([lowspeed-tuning](lowspeed-tuning.md)) · YOLO [`yolo-weights`](yolo-weights.md)
+4. **신호등 / 랩 카운트** — 출발 적→녹 · **종료까지 초록** · 정면 통과로 랩 구분(색으로 세지 말 것)
+5. **정지 퓨전** — **차량 감지** 트리거 + 규정집 위치 · 출발점+30cm · FOV 상실
+6. **차선** — **좌 점선 밟지 않기** · 우 실선은 밟아도 OK·넘어가면 금지 ([verbal-briefing](../06-final-eval/verbal-briefing.md)) · [lowspeed-tuning](lowspeed-tuning.md) · YOLO [`yolo-weights`](yolo-weights.md)
 7. (미완료 HW가 있으면) [전원](../03-hardware/power-wiring.md) · [제어](../03-hardware/control-wiring.md) · [프레임·라이다](../03-hardware/frame-and-lidar.md)
 
 치트시트: [cheat-sheet.md](cheat-sheet.md)
@@ -87,11 +87,11 @@ git clone --depth 1 https://github.com/cms1575/autonomous_vehicle_SKKU.git
 가규정: [verbal-briefing.md](../06-final-eval/verbal-briefing.md) (룰미팅 후 갱신)
 
 - [ ] SMPS **12.0V** · 센서 전후110/좌우60/높이75cm 이내
-- [ ] 신호등 탐지 대기 → 초록 후 출발 (조기 출발 a2 방지)
-- [ ] 2차선 · 반시계 · 2바퀴 · 4분 내 · 종료 정지 = **규정집**(앞·뒤 바퀴 vs 정지선) · a3/a4
+- [ ] 신호등 탐지 대기 → 초록 후 출발 (a2 방지) · **랩2 종료까지 초록** · 종료는 **차량 감지**
+- [ ] 2차선 · 반시계 · 2바퀴 · 4분 내 · 정지 = **규정집** 위치 · a3/a4
 - [ ] 1랩 무장애 · 랩2 도착 차량≈출발점+30cm · 물체탐지 정석·수단 자유
-- [ ] FOV 상실 대비: 카메라만으로 최종 정지하지 않기 · LiDAR/지연 퓨전
-- [ ] 랩 중 `red`를 출발 대기로 오인하지 않기 · **랩2 적불 여부** 룰미팅에서 확인
-- [ ] 차선 침범(b3)·이탈(b1)·랩타이머 충돌(b4)·5초 스톨(b2) 대응
+- [ ] FOV 상실 대비 퓨전 정지
+- [ ] 차선: **좌 점선 밟기=b3** · 우 실선 밟기=무 · **넘어가면 b1**
+- [ ] 랩타이머 충돌(b4)·5초 스톨(b2) 대응
 - [ ] `main.launch.py`: serial 활성 · 미션 시 **신호등·라이다** 주석 해제
 - [ ] `best.pt` + `drive_speed` 저속 튜닝 ([yolo-weights](yolo-weights.md) · [lowspeed-tuning](lowspeed-tuning.md))
