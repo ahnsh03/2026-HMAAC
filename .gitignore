@@ -13,3 +13,6 @@ src/camera_perception_pkg/camera_perception_pkg/lib/Collected_Datasets/Last_trai
 
 # BEV calibrator output
 src_mat.json
+
+# Runtime rosbag recordings from sensor_bag.launch.py
+bags/

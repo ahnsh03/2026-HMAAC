@@ -63,24 +63,24 @@ def generate_launch_description():
             output='screen',
             condition=IfCondition(LaunchConfiguration('enable_traffic_light')),
         ),
-        # Node(
-        #     package='lidar_perception_pkg',
-        #     executable='lidar_publisher_node',
-        #     name='lidar_publisher_node',
-        #     output='screen'
-        # ),
-        # Node(
-        #     package='lidar_perception_pkg',
-        #     executable='lidar_processor_node',
-        #     name='lidar_processor_node',
-        #     output='screen'
-        # ),
-        # Node(
-        #     package='lidar_perception_pkg',
-        #     executable='lidar_obstacle_detector_node',
-        #     name='lidar_obstacle_detector_node',
-        #     output='screen'
-        # ),
+        Node(
+            package='lidar_perception_pkg',
+            executable='lidar_publisher_node',
+            name='lidar_publisher_node',
+            output='screen'
+        ),
+        Node(
+            package='lidar_perception_pkg',
+            executable='lidar_processor_node',
+            name='lidar_processor_node',
+            output='screen'
+        ),
+        Node(
+            package='lidar_perception_pkg',
+            executable='lidar_obstacle_detector_node',
+            name='lidar_obstacle_detector_node',
+            output='screen'
+        ),
         Node(
             package='decision_making_pkg',
             executable='motion_planner_node',
@@ -98,19 +98,18 @@ def generate_launch_description():
             name='path_planner_node',
             output='screen'
         ),
-        Node(
-            package='serial_communication_pkg',
-            executable='serial_sender_node',
-            name='serial_sender_node',
-            output='screen'
-        ),
+        # Node(
+        #     package='serial_communication_pkg',
+        #     executable='serial_sender_node',
+        #     name='serial_sender_node',
+        #     output='screen'
+        # ),
         Node(
             package='debug_pkg',
             executable='yolov8_visualizer_node',
             name='yolov8_visualizer_node',
             output='screen',
             condition=IfCondition(LaunchConfiguration('debug')),
-            parameters=[{'show_image': ParameterValue(LaunchConfiguration('debug'), value_type=bool)}],
         ),
         Node(
             package='debug_pkg',
@@ -118,6 +117,5 @@ def generate_launch_description():
             name='path_visualizer_node',
             output='screen',
             condition=IfCondition(LaunchConfiguration('debug')),
-            parameters=[{'show_image': ParameterValue(LaunchConfiguration('debug'), value_type=bool)}],
         ),
     ])

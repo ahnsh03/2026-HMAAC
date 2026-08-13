@@ -4,6 +4,8 @@ sudo chmod 777 /dev/ttyACM0
 # --- 실차 인지 테스트 (모터 OFF, serial 주석 유지) ---
 # cd ~/ros2_ws
 # source /opt/ros/humble/setup.bash && source install/setup.bash
+source ~/team14/ros2_ws/install/setup.bash
+
 # colcon build --symlink-install --packages-select launch_pkg debug_pkg camera_perception_pkg
 # source install/setup.bash
 #

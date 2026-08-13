@@ -1,4 +1,5 @@
 import cv2
+import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
@@ -11,6 +12,7 @@ from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from interfaces_pkg.msg import TargetPoint, LaneInfo, DetectionArray, BoundingBox2D, Detection
 from .lib import camera_perception_func_lib as CPFL
+from .lib.imgmsg import numpy_to_imgmsg
 
 #---------------Variable Setting---------------
 # Subscribe할 토픽 이름
@@ -32,6 +34,8 @@ class Yolov8InfoExtractor(Node):
         self.sub_topic = self.declare_parameter('sub_detection_topic', SUB_TOPIC_NAME).value
         self.pub_topic = self.declare_parameter('pub_topic', PUB_TOPIC_NAME).value
         self.show_image = self.declare_parameter('show_image', SHOW_IMAGE).value
+        if isinstance(self.show_image, str):
+            self.show_image = self.show_image.strip().lower() in ("1", "true", "yes", "on")
         # 교육 기본 IPM. bev_calibrator(카메라 이미지)로 측정한 값만 launch로 덮어쓴다.
         self.src0_x = int(self.declare_parameter('src0_x', 238).value)
         self.src0_y = int(self.declare_parameter('src0_y', 316).value)
@@ -59,8 +63,24 @@ class Yolov8InfoExtractor(Node):
         # ROI 이미지 퍼블리셔 추가
         self.roi_image_publisher = self.create_publisher(Image, ROI_IMAGE_TOPIC_NAME, self.qos_profile)
 
+        if self.show_image:
+            try:
+                cv2.namedWindow('lane2_edge_image', cv2.WINDOW_NORMAL)
+                cv2.namedWindow('lane2_bird_img', cv2.WINDOW_NORMAL)
+                cv2.namedWindow('roi_img', cv2.WINDOW_NORMAL)
+                cv2.waitKey(1)
+            except Exception as exc:
+                self.get_logger().warn(f"namedWindow failed: {exc}")
+                self.show_image = False
+
     def yolov8_detections_callback(self, detection_msg: DetectionArray):
         if len(detection_msg.detections) == 0:
+            if self.show_image:
+                blank = np.zeros((480, 640, 3), dtype=np.uint8)
+                cv2.putText(blank, "no detections (waiting YOLO)", (30, 240),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+                cv2.imshow('lane2_edge_image', blank)
+                cv2.waitKey(1)
             return
         
         lane2_edge_image = CPFL.draw_edges(detection_msg, cls_name='lane2', color=255)
@@ -88,7 +108,7 @@ class Yolov8InfoExtractor(Node):
 
         # roi_image를 ROS Image 메시지로 변환
         try:
-            roi_image_msg = self.cv_bridge.cv2_to_imgmsg(roi_image, encoding="mono8")
+            roi_image_msg = numpy_to_imgmsg(roi_image, encoding="mono8")
             # ROI 이미지를 퍼블리시
             self.roi_image_publisher.publish(roi_image_msg)
         except Exception as e:
@@ -123,7 +143,8 @@ def main(args=None):
     finally:
         node.destroy_node()
         cv2.destroyAllWindows()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
   
 if __name__ == '__main__':
     main()

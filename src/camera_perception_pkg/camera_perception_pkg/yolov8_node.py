@@ -344,6 +344,13 @@ class Yolov8Node(LifecycleNode):
             detections_msg.header = msg.header
             self._pub.publish(detections_msg)
 
+            if not getattr(self, "_logged_first_pred", False):
+                self._logged_first_pred = True
+                names = [d.class_name for d in detections_msg.detections[:8]]
+                self.get_logger().info(
+                    f"first inference: n={len(detections_msg.detections)} names={names}"
+                )
+
             del results
             del cv_image
 

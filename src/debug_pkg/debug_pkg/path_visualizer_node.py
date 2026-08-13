@@ -6,6 +6,7 @@ from interfaces_pkg.msg import PathPlanningResult
 import cv2
 import numpy as np
 from cv_bridge import CvBridge
+from .imgmsg import numpy_to_imgmsg
 
 #---------------Variable Setting---------------
 SUB_ROI_IMAGE_TOPIC = "roi_image"        # ROI 이미지 토픽
@@ -22,6 +23,8 @@ class PathVisualizerNode(Node):
         self.sub_spline_path_topic = self.declare_parameter('sub_spline_path_topic', SUB_SPLINE_PATH_TOPIC).value
         self.pub_topic = self.declare_parameter('pub_topic', PUB_TOPIC_NAME).value
         self.show_image = self.declare_parameter('show_image', True).value
+        if isinstance(self.show_image, str):
+            self.show_image = self.show_image.strip().lower() in ("1", "true", "yes", "on")
 
         # QoS 설정
         self.qos_profile = QoSProfile(
@@ -48,6 +51,14 @@ class PathVisualizerNode(Node):
         self.roi_image = None
         self.spline_path = None
 
+        if self.show_image:
+            try:
+                cv2.namedWindow('path_visualized_img', cv2.WINDOW_NORMAL)
+                cv2.waitKey(1)
+            except Exception as e:
+                self.get_logger().warn(f"namedWindow failed: {e}")
+                self.show_image = False
+
     def roi_image_callback(self, msg: Image):
         try:
             img = self.cv_bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
@@ -73,7 +84,7 @@ class PathVisualizerNode(Node):
                 cv2.circle(vis, (px, py), 5, (0, 0, 255), -1)
 
         try:
-            output_msg = self.cv_bridge.cv2_to_imgmsg(vis, encoding='bgr8')
+            output_msg = numpy_to_imgmsg(vis, encoding='bgr8')
             self.publisher.publish(output_msg)
         except Exception as e:
             self.get_logger().error(f"Failed to convert image for publishing: {e}")
@@ -97,7 +108,8 @@ def main(args=None):
     finally:
         node.destroy_node()
         cv2.destroyAllWindows()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':
