@@ -3,7 +3,7 @@
 목적: 실차에 차선(`lane2`)·신호등(`traffic_light`)이 잡히게 한다.  
 시뮬 `sim.pt`는 쓰지 않는다.
 
-관련: [external-references.md](external-references.md) · [weights/README.md](../../src/camera_perception_pkg/camera_perception_pkg/weights/README.md) · [repo-structure-and-realcar-guide.md](repo-structure-and-realcar-guide.md) · [lowspeed-tuning.md](lowspeed-tuning.md)
+관련: [teamop-vs-team14.md](teamop-vs-team14.md) · [controller-tuning.md](controller-tuning.md) · [external-references.md](external-references.md) · [weights/README.md](../../src/camera_perception_pkg/camera_perception_pkg/weights/README.md) · [repo-structure-and-realcar-guide.md](repo-structure-and-realcar-guide.md) · [lowspeed-tuning.md](lowspeed-tuning.md)
 
 ---
 
@@ -20,18 +20,18 @@
 | 구분 | 상태 |
 |------|------|
 | Roboflow **데이터셋** | `lane2`/`traffic_light` **라벨 있음** (train~1950). Universe가 비공개면 다운로드에 **팀 Roboflow API 키 + 접근 권한** 필요 |
-| **이미 학습된 가중치** | `kingo_car.ipynb`로 그 데이터셋을 학습한 산출물이 TeamOP 계열 `best.pt`와 동일 계열 → Course **`teamop_best.pt` 등이 사실상 Kingo 학습본** |
+| **이미 학습된 가중치** | **Kingo만 학습한 쪽은 `team14_best.pt`** (클래스 이름이 `box`/`undefined`로 오염). `teamop_best.pt`는 `H_merge_all-1` 병합 학습본이라 우리 차에서 더 낫다. 상세: [teamop-vs-team14.md](teamop-vs-team14.md) |
 | 지금 이 WSL에서 재학습 | GPU/NVML 차단 · ultralytics 미설치 · Roboflow 403 → **지금 당장 새 `.pt` 생성은 불가** |
 | Colab에서 다시 학습 | 가능. `model=yolov8s-seg.pt`(스크래치) 또는 `model=teamop_best.pt`(파인튜닝) |
 | 파인튜닝에 Kingo 쓰기 | **가능·권장**. 드롭인이 커튼/카메라각에서 약하면 Kingo(+현장 소수 장)로 `teamop_best.pt`를 추가 epoch |
 
-정리: Kingo는 “아직 아무도 학습 안 한 raw”가 아니라 **라벨드 학습셋**. 우리는 그 결과물에 가까운 가중치를 이미 `weights/`에 넣어 두었고, 재학습은 **접근 권한 + Colab/실차 GPU**가 있을 때 백업·파인튜닝용이다.
+정리: Kingo는 “아직 아무도 학습 안 한 raw”가 아니라 **라벨드 학습셋**. 그 순수 학습본에 가까운 것은 `team14`이고, 실차에서는 병합본 `teamop`이 더 낫다. 팀원 `best_psh.pt`(yolo11s-seg)는 차선이 더 좋고 신호등이 약하다. 재학습은 팀원 TL FT + 실패 코너 프레임이 우선이다.
 
 ### 지금 Colab으로 갈 필요 있나? (결론)
 
 | 질문 | 답 |
 |------|-----|
-| Kingo로 다시 학습해서 가져가야 하나? | **아니요.** `teamop_best` 등이 이미 그 계열. 동일 데이터 재학습은 거의 같은 모델 |
+| Kingo로 다시 학습해서 가져가야 하나? | **아니요.** Kingo 재학습은 team14에 가깝고, 실차에선 teamop·psh가 더 낫다 |
 | 파인튜닝은? | **드롭인 돌려보고 안 되면** 시작. 사전 예방 파인튜닝은 시간 대비 이득 작음 |
 | “알려진 정보만으로” 보완 가중치를 미리 판별? | **부분만.** 갭 후보(카메라각·커튼·노출)는 알지만, **우리 차 FOV에서 실제로 깨지는지**는 정지 검출 전에는 모름. Kingo만 추가 epoch해도 분포가 같아서 보완이 약함 |
 | 언제 FT가 의미 있나? | 마스크 끊김·중심 편향이 **재현**될 때 → 그 장면(커튼/각도) **수십~수백 장** + Kingo(또는 `teamop` 초기가중치)로 FT |
@@ -79,24 +79,26 @@ F23(`lane-center` 등)은 공식 `lane_info_extractor`와 **비호환** → 드�
 
 | 순위 | 파일 | 클래스 확인 | 비고 |
 |:---:|------|-------------|------|
-| 1 | `teamop_best.pt` | `lane2`, `traffic_light` | **1순위** |
-| 2 | `youngsangc_best.pt` | 동일 | |
-| 3 | `1taekim_best.pt` | 동일 | 실패 시 `1taekim_ti_best.pt` |
-| 4 | `cms1575_best.pt` | 동일 | m-seg ~52MB, 느릴 수 있음 |
-| 5 | `hlhl_best.pt` / `hlhl_best_new.pt` | 약함 | 백업 테스트 |
-| — | `hlhl_traffic_light.pt` | 신호 전용 | 단일 멀티클래스 노드와 별개 · 참고만 |
+| 1 | `best_psh.pt` | `lane2`, `traffic_light` | 팀원 yolo11s-seg. **차선 추종 A/B**. TL 약함 |
+| 1 | `teamop_best.pt` | `lane2`, `object`, `traffic_light` | 공개 기준점. team14보다 실차에서 우위 |
+| — | `team14_best.pt` | `box`, `lane2`, … | **쓰지 않음.** Kingo-only + 클래스 오염 |
+| 3 | `1taekim_best.pt` | `lane2`, `traffic_light` | conf 낮음·마스크 번짐. 백업 |
+| 4 | `youngsangc_best.pt` | 동일 | |
+| 5 | `cms1575_best.pt` | 동일 | m-seg ~52MB, 느릴 수 있음 |
+| — | `hlhl_*` | `lane` 등 | 차선 드롭인 금지 |
 
 ```bash
-W=$HOME/ros2_ws/src/camera_perception_pkg/camera_perception_pkg/weights
+W=$HOME/ros2_ws/weights   # race 레포 루트. 예전 경로는 camera_perception_pkg/.../weights
 
 ros2 launch launch_pkg main.launch.py \
-  model:=$W/teamop_best.pt device:=cuda:0 drive_speed:=50
+  model:=$W/best_psh.pt device:=cuda:0
 
-# 교체 예
-# model:=$W/youngsangc_best.pt
-# model:=$W/1taekim_best.pt
+# 공개 기준점
+# model:=$W/teamop_best.pt
 # threshold:=0.3   # 미검출 많을 때
 ```
+
+제어까지 같이 볼 때: [controller-tuning.md](controller-tuning.md). team14를 다시 넣지 말 것.
 
 ### 정지 상태 통과 기준
 
@@ -129,7 +131,7 @@ ros2 topic echo /yolov8_lane_info --once
 
 ### 권장 워크플로 (질문에 대한 답: **맞다**)
 
-1. **여러 가중치를 테스트** (순위: teamop → youngsangc → …)
+1. **여러 가중치를 테스트** (지금: `best_psh` ↔ `teamop`. team14는 제외)
 2. **실패 지점을 기록** (아래 시트) — 어떤 `.pt`가 상대적으로 제일 나은지 고른다
 3. **가장 좋았던 가중치**를 FT 시작점으로 둔다
 4. 실패가 난 구간에서 **추가 로깅**(bag / `data_collection` `c`·`v`) → 라벨(`lane2`, 필요 시 `traffic_light`)
@@ -143,9 +145,8 @@ ros2 topic echo /yolov8_lane_info --once
 
 | 시각 | 가중치 | drive_speed / threshold | 정지 `lane2`? | 타겟점? | 신호? | 실패 지점(코너/직선/커튼/노출/각도) | bag·영상 경로 | 비고 |
 |------|--------|-------------------------|---------------|---------|-------|-------------------------------------|---------------|------|
-| | teamop_best | 50 / 0.5 | | | | | | |
-| | youngsangc_best | | | | | | | |
-| | 1taekim_best | | | | | | | |
+| | best_psh | 70 / 0.5 | | | | | | |
+| | teamop_best | 70 / 0.5 | | | | | | |
 
 기록할 때 특히:
 
@@ -212,8 +213,8 @@ ros2 launch launch_pkg main.launch.py model:=$W/teamop_best.pt device:=cuda:0 th
 
 ## 8. 체크리스트 (내일)
 
-- [ ] `teamop_best.pt` + `cuda:0` launch
-- [ ] 정지 상태에서 `lane2` 검출
-- [ ] 실패 시 youngsangc → 1taekim → cms 순 교체 · **§4 시트에 실패 지점 기록**
+- [ ] `best_psh.pt` + `cuda:0` 정지 검출 (`lane2`)
+- [ ] 같은 제어로 `teamop_best.pt` A/B ([controller-tuning](controller-tuning.md))
+- [ ] team14는 스킵
 - [ ] 저속 주행 ([lowspeed-tuning](lowspeed-tuning.md))
-- [ ] 드롭인으로 부족할 때만: 최우수 `.pt` + 실패 프레임으로 FT (§4·§5)
+- [ ] 신호등 FT는 팀원 `best_psh` 쪽. 우리는 실패 코너 프레임만 라벨

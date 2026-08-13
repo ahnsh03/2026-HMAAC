@@ -25,34 +25,35 @@ cd ~/ros2_ws
 colcon build --symlink-install
 # 실패 시: rm -rf build install log && colcon build --symlink-install
 
-W=$HOME/ros2_ws/src/camera_perception_pkg/camera_perception_pkg/weights
+W=$HOME/ros2_ws/weights
 # 소단위 (모터 OFF) — 상세: debug-and-incremental-test.md
 ros2 launch launch_pkg camera_only.launch.py cam_num:=0
 ./scripts/c920_setup.sh match_train /dev/video0
 ros2 launch launch_pkg perception_debug.launch.py \
-  model:=$W/teamop_best.pt device:=cuda:0 cam_num:=0
+  model:=$W/best_psh.pt device:=cuda:0 cam_num:=0
+# A/B: model:=$W/teamop_best.pt
 ros2 run debug_pkg bev_calibrator_node
 ./scripts/run_session.sh
-# 폐루프
+# 폐루프 (race는 drive_speed 없을 수 있음)
 ros2 launch launch_pkg main.launch.py \
-  model:=$W/teamop_best.pt device:=cuda:0 drive_speed:=50
-# 교체: youngsangc_best.pt → 1taekim_best.pt → 1taekim_ti_best.pt → cms1575_best.pt
+  model:=$W/best_psh.pt device:=cuda:0
+# A/B: model:=$W/teamop_best.pt
 python3 src/data_collection/data_collection.py
 ```
 
 `main.launch.py`: Stage1에 **serial_sender 활성**. 신호등·라이다는 미션 시 주석 해제.  
-가이드: [repo-structure-and-realcar-guide.md](repo-structure-and-realcar-guide.md) · [yolo-weights.md](yolo-weights.md) · [debug-and-incremental-test.md](debug-and-incremental-test.md)
+가이드: [repo-structure-and-realcar-guide.md](repo-structure-and-realcar-guide.md) · [yolo-weights.md](yolo-weights.md) · [controller-tuning.md](controller-tuning.md) · [debug-and-incremental-test.md](debug-and-incremental-test.md)
 
 ## 가중치 스왑 · 정지 검출
 
 ```bash
-W=$HOME/ros2_ws/src/camera_perception_pkg/camera_perception_pkg/weights
-# 1) teamop → 2) youngsangc → 3) 1taekim → 4) cms1575
+W=$HOME/ros2_ws/weights
+# 1) best_psh ↔ 2) teamop   (team14 제외)
 ros2 topic echo /detections --once          # lane2 마스크?
 ros2 topic echo /yolov8_lane_info --once    # 타겟점?
 ```
 
-목록·분석: [yolo-weights](yolo-weights.md) · 참고 레포: [external-references](external-references.md)
+목록·분석: [yolo-weights](yolo-weights.md) · [teamop-vs-team14](teamop-vs-team14.md) · 참고 레포: [external-references](external-references.md)
 
 ## 디버그 토픽
 

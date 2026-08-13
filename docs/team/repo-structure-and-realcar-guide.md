@@ -2,7 +2,7 @@
 
 목적: 코드를 “어디에 손대면 차가 나가는지”만 잡고, 실차에서 바로 실험할 수 있게 머리 속 지도를 그린다.
 
-관련: [tomorrow-prep.md](tomorrow-prep.md) · [cheat-sheet.md](cheat-sheet.md) · [yolo-weights.md](yolo-weights.md) · [debug-and-incremental-test.md](debug-and-incremental-test.md) · [external-references.md](external-references.md) · [lowspeed-tuning.md](lowspeed-tuning.md)
+관련: [tomorrow-prep.md](tomorrow-prep.md) · [cheat-sheet.md](cheat-sheet.md) · [yolo-weights.md](yolo-weights.md) · [teamop-vs-team14.md](teamop-vs-team14.md) · [controller-tuning.md](controller-tuning.md) · [debug-and-incremental-test.md](debug-and-incremental-test.md) · [external-references.md](external-references.md) · [lowspeed-tuning.md](lowspeed-tuning.md)
 
 ---
 

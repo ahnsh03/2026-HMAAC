@@ -2,7 +2,7 @@
 
 목적: 인지가 붙은 뒤 **느려도 이탈 없이** 차로를 따라가게 하고, 그다음 미션을 완성한다.
 
-관련: [repo-structure-and-realcar-guide.md](repo-structure-and-realcar-guide.md) · [dev-checklist.md](../06-final-eval/dev-checklist.md)
+관련: [controller-tuning.md](controller-tuning.md) · [teamop-vs-team14.md](teamop-vs-team14.md) · [repo-structure-and-realcar-guide.md](repo-structure-and-realcar-guide.md) · [dev-checklist.md](../06-final-eval/dev-checklist.md)
 
 ---
 
@@ -16,7 +16,9 @@
 cd ~/ros2_ws
 source /opt/ros/humble/setup.bash && source install/setup.bash
 colcon build --symlink-install --packages-select decision_making_pkg launch_pkg
-ros2 launch launch_pkg main.launch.py model:=best.pt drive_speed:=50
+ros2 launch launch_pkg main.launch.py model:=weights/best_psh.pt
+# A/B: model:=weights/teamop_best.pt
+# race는 drive_speed 파라미터가 없을 수 있음 (코드 70 고정). 상세: controller-tuning.md
 ```
 
 정지(또는 바퀴 든 상태)에서:

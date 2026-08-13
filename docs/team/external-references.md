@@ -67,7 +67,7 @@ stock IPM = `[[238,316],[402,313],[501,476],[155,476]]`. 우리 카메라각이 
 
 - 원본: [hyeyeonIm/TeamOP](https://github.com/hyeyeonIm/TeamOP)  
   `git clone --depth 1 https://github.com/hyeyeonIm/TeamOP.git`
-- H-모빌리티 14기. Kingo 계열 `best.pt` → 우리 `weights/teamop_best.pt` (**1순위 드롭인**).
+- H-모빌리티 14기. 병합셋 `H_merge_all` → 우리 `weights/teamop_best.pt` (공개 기준점). Kingo-only는 `team14_best`이며 실차에선 더 약함 ([teamop-vs-team14.md](teamop-vs-team14.md)).
 - `path_planner` 없음. lane → motion 직결.
 - 조향: `B_max=8`, `kp=0.07`, `kd=2`, arctan + 미분 억제. Course bang-bang과 **구조가 다름**.
 - 속도 **255 고정** — 내일 그대로 쓰지 말 것. 저속 50부터.
@@ -228,7 +228,7 @@ stock IPM = `[[238,316],[402,313],[501,476],[155,476]]`. 우리 카메라각이 
 
 | 종류 | 링크 | 메모 |
 |------|------|------|
-| Roboflow Kingo Car | [kingo-car-1z3da](https://universe.roboflow.com/hyeyeonim-r19sp/kingo-car-1z3da) | 라벨드. 산출물 ≈ `teamop_best.pt`. 재학습·FT: [yolo-weights.md](yolo-weights.md) |
+| Roboflow Kingo Car | [kingo-car-1z3da](https://universe.roboflow.com/hyeyeonim-r19sp/kingo-car-1z3da) | 라벨드. 순수 학습본 ≈ `team14_best`(비권장). 실차 공개 기준점은 `teamop`. [yolo-weights.md](yolo-weights.md) |
 | Kaggle 시뮬 이미지 | [skkuhhk/…](https://www.kaggle.com/datasets/skkuhhk/ros2-autonomous-vehicle-simulation) | 라벨 없음 · 실차 조도/색과 달라 **우선순위 낮음** |
 | HF 시뮬 가중치 | [gogoring/simulation_ws](https://huggingface.co/gogoring/simulation_ws) | `sim.pt` **실차 금지** |
 | 제4회 SKKU AI 안내 | [oopy](https://studentsuccess.oopy.io/36c91056-74bf-80e7-8edb-d074d75ca1c7) | 교내 대회 (F23) |
