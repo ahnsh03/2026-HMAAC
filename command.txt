@@ -20,8 +20,9 @@ source ~/team14/ros2_ws/install/setup.bash
 # 3) 가중치 A/B (아래 SRC 에 2에서 복사한 숫자)
 # W=$HOME/ros2_ws/weights
 # SRC='src0_x:=238 src0_y:=316 src1_x:=402 src1_y:=313 src2_x:=501 src2_y:=476 src3_x:=155 src3_y:=476 cutting_idx:=300'
-# ros2 launch launch_pkg perception_debug.launch.py model:=$W/team14_best.pt device:=cuda:0 cam_num:=0 $SRC
 # ros2 launch launch_pkg perception_debug.launch.py model:=$W/teamop_best.pt device:=cuda:0 cam_num:=0 $SRC
+# ros2 launch launch_pkg perception_debug.launch.py model:=$W/best_psh.pt device:=cuda:0 cam_num:=0 $SRC
+# ros2 launch launch_pkg perception_debug.launch.py model:=$W/team14_best.pt device:=cuda:0 cam_num:=0 $SRC
 # ros2 launch launch_pkg perception_debug.launch.py model:=$W/1taekim_ti_best.pt device:=cuda:0 cam_num:=0 $SRC
 # ros2 launch launch_pkg perception_debug.launch.py model:=$W/youngsangc_best.pt device:=cuda:0 cam_num:=0 $SRC
 # ros2 launch launch_pkg perception_debug.launch.py model:=$W/1taekim_best.pt device:=cuda:0 cam_num:=0 $SRC
@@ -33,7 +34,7 @@ source ~/team14/ros2_ws/install/setup.bash
 # 터미널 2:
 #   source /opt/ros/humble/setup.bash && source install/setup.bash
 #   ./scripts/topic_rates.sh
-#   MODEL=best_psh.pt ./scripts/run_session.sh
+#   MODEL=teamop_best.pt ./scripts/run_session.sh
 #   # 용량 줄이기: SKIP_VISUALIZED=1 ./scripts/run_session.sh
 # 재생 (serial_sender 끄고):
 #   ros2 bag play ~/hmaac_logs/<STAMP>/bag/eval

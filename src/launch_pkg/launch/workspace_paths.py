@@ -41,6 +41,8 @@ def workspace_root() -> Path:
 def default_yolo_weights() -> str:
     root = workspace_root()
     candidates = [
+        root / "weights" / "teamop_best.pt",
+        root / "weights" / "best_psh.pt",
         root / "best.pt",
         root / "weights" / "team14_best.pt",
         root / "weights" / "best.pt",
