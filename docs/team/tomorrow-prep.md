@@ -75,7 +75,7 @@ git clone --depth 1 https://github.com/cms1575/autonomous_vehicle_SKKU.git
 2. **소단위 디버그** — 카메라 → C920e → 인지(serial OFF) → IPM 트랙바 ([debug-and-incremental-test](debug-and-incremental-test.md))
 3. **로깅 인프라** — `./scripts/run_session.sh` dry-run ([logging-and-experiments](../06-final-eval/logging-and-experiments.md))
 4. **신호등 / 랩 카운트** — 출발 적→녹 · **종료까지 초록** · 정면 통과로 랩 구분(색으로 세지 말 것)
-5. **정지 퓨전** — **차량 감지** 트리거 + 규정집 위치 · 출발점+30cm · FOV 상실
+5. **정지 퓨전** — **좌측 차량 AND 신호등 박스≈Npx** 휴리스틱 우선 ([mission-strategy](../06-final-eval/mission-strategy.md)) · 규정집 위치 · LiDAR 백업
 6. **차선** — **좌 점선 밟지 않기** · 우 실선은 밟아도 OK·넘어가면 금지 ([verbal-briefing](../06-final-eval/verbal-briefing.md)) · [lowspeed-tuning](lowspeed-tuning.md) · YOLO [`yolo-weights`](yolo-weights.md)
 7. (미완료 HW가 있으면) [전원](../03-hardware/power-wiring.md) · [제어](../03-hardware/control-wiring.md) · [프레임·라이다](../03-hardware/frame-and-lidar.md)
 

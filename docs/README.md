@@ -39,6 +39,7 @@ docs/
     repo-structure-and-realcar-guide.md
     tomorrow-prep.md · hw-boot.md
     yolo-weights.md · teamop-vs-team14.md · controller-tuning.md
+    wait-green.md · tl-hsv-tuning.md
     external-references.md · lowspeed-tuning.md
     debug-and-incremental-test.md
     notebooks/kingo_car.ipynb
@@ -61,6 +62,7 @@ docs/
 - [teamop vs team14 실차 분석](team/teamop-vs-team14.md)
 - [제어기 튜닝 아이디어](team/controller-tuning.md)
 - [초록 출발 최소 설계](team/wait-green.md)
+- [신호등 HSV 튜닝 (13일)](team/tl-hsv-tuning.md)
 - [소단위 디버그 · 시각화 · 로깅](team/debug-and-incremental-test.md)
 - [공개 참고 레포 · 자료](team/external-references.md)
 - [저속 튜닝 · 미션](team/lowspeed-tuning.md)

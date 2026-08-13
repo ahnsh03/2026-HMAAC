@@ -59,7 +59,10 @@ sequenceDiagram
 ## 정지 수단 · FOV
 
 - 최종 위치 근처에서 1차로 차량·정지선이 카메라 FOV 밖으로 사라질 수 있음
-- **조기 관측 + LiDAR/지연 마무리** → [mission-strategy.md](mission-strategy.md)
+- **조기 관측 + LiDAR/지연 마무리** 또는 팀 논의 단순안:
+  - **좌측(1차로) 차량 감지 AND 신호등 detection 박스 ≈ N픽셀** → 정지
+  - 정지선 인식·신호등 **랩 카운트**보다 단순할 수 있음 (거리 프록시는 박스 크기)
+- 상세·실험값: [mission-strategy.md](mission-strategy.md) «팀 논의안 — 단순 정지 휴리스틱»
 
 ## 신호등 (08-13 확정)
 

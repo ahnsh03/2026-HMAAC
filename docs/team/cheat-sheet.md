@@ -41,7 +41,8 @@ ros2 launch launch_pkg main.launch.py \
 python3 src/data_collection/data_collection.py
 ```
 
-`main.launch.py`: Stage1에 **serial_sender 활성**. 신호등·라이다는 미션 시 주석 해제.  
+`main.launch.py`: Stage1에 **serial_sender 활성**. 신호등 detector 기본 ON (`enable_traffic_light:=false`로 끔). 라이다는 주석.  
+구간 테스트: [wait-green.md](wait-green.md) §6 — `/force_start` 또는 `require_green_start:=false`.  
 가이드: [repo-structure-and-realcar-guide.md](repo-structure-and-realcar-guide.md) · [yolo-weights.md](yolo-weights.md) · [controller-tuning.md](controller-tuning.md) · [debug-and-incremental-test.md](debug-and-incremental-test.md)
 
 ## 가중치 스왑 · 정지 검출
@@ -60,7 +61,10 @@ ros2 topic echo /yolov8_lane_info --once    # 타겟점?
 ```bash
 ros2 topic hz /image_raw
 ros2 topic echo /detections --once
+ros2 topic echo /yolov8_traffic_light_info
 ros2 topic echo /topic_control_signal
+# 구간 테스트: 대기 중일 때 출발
+ros2 topic pub --once /force_start std_msgs/msg/Bool "{data: true}"
 ```
 
 ## Arduino 핀 (`driving.ino`)
@@ -84,9 +88,9 @@ ros2 topic echo /topic_control_signal
 ## 주행 평가 (ver3.3 + 구두 가규정)
 
 - 미션: **2차선 · 반시계 2바퀴 · 4분** · 적→녹 후 **종료까지 초록** · 1랩 무장애 · 도착 차량≈출발점+**30cm**
-- 정지: **차량 감지**로 정지 (신호등 적불 아님) · 규정집 위치 · FOV → 조기관측+라이다
+- 정지: **차량 감지** (+논의안: **좌측 차량 AND 신호등 박스≈Npx**) · 규정집 위치 · FOV → 조기관측+라이다 백업
 - 차선: **좌 점선 밟기=페널티** · **우 실선 밟기=무페널티** · **어디든 넘어가면 페널티**
 - 채점: 페널티=시간 · 랩타임(+페널티) 짧은 순
 - HW: **SMPS 12.0V** · 센서 ≤전후110 / 좌우60 / 높이75 cm · 제공 부품만
 - 재시도 1 · 재위치 ≤3 · 페널티: a1+30 · a2/a3+50 · a4+10 · b1+15 · b2+20 · b3+10/회 · b4+30
-- 상세: [rules](../06-final-eval/rules.md) · [verbal-briefing](../06-final-eval/verbal-briefing.md) · [strategy](../06-final-eval/mission-strategy.md) · [logging](../06-final-eval/logging-and-experiments.md)
+- 상세: [rules](../06-final-eval/rules.md) · [verbal-briefing](../06-final-eval/verbal-briefing.md) · [strategy](../06-final-eval/mission-strategy.md) · [logging](../06-final-eval/logging-and-experiments.md) · [wait-green](wait-green.md)

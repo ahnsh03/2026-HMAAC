@@ -141,8 +141,8 @@ traffic_light_detector_node  →  박스 ROI에 HSV → Red/Yellow/Green/Unknown
 | | Plan A (내일) | Plan B |
 |--|----------------|--------|
 | 박스 | `yolov8_visualizer` + `/detections` | 동일 |
-| 색 | 기존 HSV 노드 launch 주석 해제 | HSV 마스크 오버레이 노드 (미구현, 오판 시) |
-| 언제 | 초록 출발 미션 | 초록이 Unknown/오탐으로 **범위 튜닝이 필요할 때** |
+| 색 | HSV 노드 launch 주석 해제 ([13일 튜닝](tl-hsv-tuning.md)) | HSV 마스크 오버레이 노드 (미구현, 조명 바뀌어 오판 시) |
+| 언제 | 초록 출발 미션 | 조명·WB가 13일과 달라 **게이트를 다시 잴 때** |
 
 HSV 디버그 이미지는 **필수 산출물이 아니다.**
 

@@ -91,8 +91,10 @@ python3 src/data_collection/data_collection.py
 
 - [ ] 출발선 앞 차량 **감지 → 정지** 트리거 동작
 - [ ] 차량 위치: 출발점+약 **30cm** 실측
+- [ ] **단순 휴리스틱:** 좌측 차량 ON일 때, 규정집 정지 위치에서의 신호등 bbox width/height/area → 임계 `N` 기록
+- [ ] 접근 중 bbox 시계열 + 좌측 차량 플래그를 bag으로 확인 (랩 중간 오탐 여부)
 - [ ] FOV 상실 거리 · 규정집 정지 위치 오차 cm
-- [ ] LiDAR만 / 카메라만 / 퓨전 — a3/a4
+- [ ] LiDAR만 / 카메라만 / **차량+TL박스** / 퓨전 — a3/a4
 
 ### 차선 · 속도
 

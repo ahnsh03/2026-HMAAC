@@ -3,7 +3,7 @@
 목적: 실차에 차선(`lane2`)·신호등(`traffic_light`)이 잡히게 한다.  
 시뮬 `sim.pt`는 쓰지 않는다.
 
-관련: [teamop-vs-team14.md](teamop-vs-team14.md) · [controller-tuning.md](controller-tuning.md) · [external-references.md](external-references.md) · [weights/README.md](../../src/camera_perception_pkg/camera_perception_pkg/weights/README.md) · [repo-structure-and-realcar-guide.md](repo-structure-and-realcar-guide.md) · [lowspeed-tuning.md](lowspeed-tuning.md)
+관련: [teamop-vs-team14.md](teamop-vs-team14.md) · [tl-hsv-tuning.md](tl-hsv-tuning.md) · [controller-tuning.md](controller-tuning.md) · [external-references.md](external-references.md) · [weights/README.md](../../src/camera_perception_pkg/camera_perception_pkg/weights/README.md) · [repo-structure-and-realcar-guide.md](repo-structure-and-realcar-guide.md) · [lowspeed-tuning.md](lowspeed-tuning.md)
 
 ---
 
@@ -46,7 +46,7 @@ C920e는 **포커스만 잠그고 노출/WB는 auto** (`scripts/c920_setup.sh ma
 
 | 대상 | 권장 | 이유 |
 |------|------|------|
-| **신호등 LED** | YOLO 박스 + **HSV 색** (기존 `traffic_light_detector_node`) | LED 채도 높음 → 조도 흔들림에도 초록 출발용으로 쓸 만함 |
+| **신호등 LED** | YOLO 박스 + **HSV 색** (`traffic_light_detector_node`, [13일 튜닝](tl-hsv-tuning.md)) | LED 채도 높음 → 조도 흔들림에도 초록 출발용으로 쓸 만함 |
 | **차선** | **YOLO-seg만** (`lane2`) | 페인트는 반사·필름·화이트밸런스에 민감 → HSV 차선 비권장 |
 
 적불 정지가 없는 간략 미션이면, 초록 확정 후 출발만 HSV/검출기를 쓰면 된다.

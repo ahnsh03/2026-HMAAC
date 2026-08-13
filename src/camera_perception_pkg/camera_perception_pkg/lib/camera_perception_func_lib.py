@@ -181,36 +181,56 @@ def get_lane_center(cv_image: np.array, detection_height: int, detection_thickne
 
 
 def get_traffic_light_color(cv_image: np.array, bbox, hsv_ranges: dict) -> str:
-	x_min, x_max = int(bbox.center.position.x - bbox.size.x / 2), int(bbox.center.position.x + bbox.size.x / 2)
-	y_min, y_max = int(bbox.center.position.y - bbox.size.y / 2), int(bbox.center.position.y + bbox.size.y / 2)
+	# 13일 실차 크롭: 점등 LED는 밝은 후광, 꺼진 등/과대박스는 유채색 픽셀이 거의 없음.
+	# 전체 ROI 비율이 전부 0이면 예전 코드는 Red를 반환했다 (0==0).
+	h_img, w_img = cv_image.shape[:2]
+	x_min = int(bbox.center.position.x - bbox.size.x / 2)
+	x_max = int(bbox.center.position.x + bbox.size.x / 2)
+	y_min = int(bbox.center.position.y - bbox.size.y / 2)
+	y_max = int(bbox.center.position.y + bbox.size.y / 2)
+	x_min, y_min = max(0, x_min), max(0, y_min)
+	x_max, y_max = min(w_img, x_max), min(h_img, y_max)
+	if x_max - x_min < 4 or y_max - y_min < 4:
+		return "Unknown"
+
 	roi = cv_image[y_min:y_max, x_min:x_max]
-	
+	if roi.size == 0:
+		return "Unknown"
+
 	hsv_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+	# 하우징·배경을 버리고 LED 후광(밝고 어느 정도 채도)만 본다.
+	# 13일 실차: 점등 크롭은 LED 픽셀 ≥461·비율 ≥4%, 꺼진/과대박스는 ≤61·≤0.3%.
+	led = (hsv_roi[:, :, 1] >= 40) & (hsv_roi[:, :, 2] >= 70)
+	led_n = int(np.count_nonzero(led))
+	led_frac = led_n / float(roi.shape[0] * roi.shape[1])
+	if led_n < 80 or led_frac < 0.01:
+		return "Unknown"
 
 	red_lower1, red_upper1 = hsv_ranges['red1']
 	red_lower2, red_upper2 = hsv_ranges['red2']
 	yellow_lower, yellow_upper = hsv_ranges['yellow']
 	green_lower, green_upper = hsv_ranges['green']
-	
-	red_mask1 = cv2.inRange(hsv_roi, red_lower1, red_upper1)
-	red_mask2 = cv2.inRange(hsv_roi, red_lower2, red_upper2)
-	red_mask = red_mask1 + red_mask2
-	yellow_mask = cv2.inRange(hsv_roi, yellow_lower, yellow_upper)
-	green_mask = cv2.inRange(hsv_roi, green_lower, green_upper)
-	
-	red_ratio = cv2.countNonZero(red_mask) / (roi.size / 3)
-	yellow_ratio = cv2.countNonZero(yellow_mask) / (roi.size / 3)
-	green_ratio = cv2.countNonZero(green_mask) / (roi.size / 3)
-	
-	max_ratio = max(red_ratio, yellow_ratio, green_ratio)
-	if max_ratio == red_ratio:
-		return "Red"
-	elif max_ratio == yellow_ratio:
-		return "Yellow"
-	elif max_ratio == green_ratio:
-		return "Green"
-	else:
+
+	red_mask = (cv2.inRange(hsv_roi, red_lower1, red_upper1) > 0) | (
+		cv2.inRange(hsv_roi, red_lower2, red_upper2) > 0
+	)
+	yellow_mask = cv2.inRange(hsv_roi, yellow_lower, yellow_upper) > 0
+	green_mask = cv2.inRange(hsv_roi, green_lower, green_upper) > 0
+
+	red_ratio = float(np.count_nonzero(red_mask & led)) / float(led_n)
+	yellow_ratio = float(np.count_nonzero(yellow_mask & led)) / float(led_n)
+	green_ratio = float(np.count_nonzero(green_mask & led)) / float(led_n)
+
+	ranked = sorted(
+		(("Red", red_ratio), ("Yellow", yellow_ratio), ("Green", green_ratio)),
+		key=lambda kv: kv[1],
+		reverse=True,
+	)
+	best, max_ratio = ranked[0]
+	second = ranked[1][1]
+	if max_ratio < 0.08 or (max_ratio - second) < 0.10:
 		return "Unknown"
+	return best
 		
 		
 
