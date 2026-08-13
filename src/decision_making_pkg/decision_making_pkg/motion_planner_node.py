@@ -1,3 +1,4 @@
+#P제어 추가랑 최대 조향값 추가, 수정한 코드이고, 아마 하파 튜닝은 차량의 주행을 보고 수정하면서 해야할 것 같습니다.
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
@@ -16,10 +17,6 @@ SUB_TRAFFIC_LIGHT_TOPIC_NAME = "yolov8_traffic_light_info"
 SUB_LIDAR_OBSTACLE_TOPIC_NAME = "lidar_obstacle_info"
 PUB_TOPIC_NAME = "topic_control_signal"
 
-# 저속 첫 주행 기본값 (launch: drive_speed:= / steer_max:= 로 덮어쓰기)
-# 문서: docs/team/lowspeed-tuning.md
-DEFAULT_DRIVE_SPEED = 60   # 0~255, 안정화 후 80~120 등으로 상향
-DEFAULT_STEER_MAX = 7      # driving.ino MAX_STEERING_STEP 과 일치
 #----------------------------------------------
 
 # 모션 플랜 발행 주기 (초) - 소수점 필요 (int형은 반영되지 않음)
@@ -35,10 +32,8 @@ class MotionPlanningNode(Node):
         self.sub_traffic_light_topic = self.declare_parameter('sub_traffic_light_topic', SUB_TRAFFIC_LIGHT_TOPIC_NAME).value
         self.sub_lidar_obstacle_topic = self.declare_parameter('sub_lidar_obstacle_topic', SUB_LIDAR_OBSTACLE_TOPIC_NAME).value
         self.pub_topic = self.declare_parameter('pub_topic', PUB_TOPIC_NAME).value
-
+        
         self.timer_period = self.declare_parameter('timer', TIMER).value
-        self.drive_speed = int(self.declare_parameter('drive_speed', DEFAULT_DRIVE_SPEED).value)
-        self.steer_max = int(self.declare_parameter('steer_max', DEFAULT_STEER_MAX).value)
 
         # QoS 설정
         self.qos_profile = QoSProfile(
@@ -58,6 +53,14 @@ class MotionPlanningNode(Node):
         self.left_speed_command = 0
         self.right_speed_command = 0
         
+        # P 제어 설정
+        self.KP = 3.0
+
+        # 최대 조향값
+        self.MAX_STEERING = 7
+
+        # 한 번의 제어 주기에서 변경 가능한 최대 조향값
+        self.MAX_STEERING_CHANGE = 1
 
         # 서브스크라이버 설정
         self.detection_sub = self.create_subscription(DetectionArray, self.sub_detection_topic, self.detection_callback, self.qos_profile)
@@ -67,14 +70,18 @@ class MotionPlanningNode(Node):
 
         # 퍼블리셔 설정
         self.publisher = self.create_publisher(MotionCommand, self.pub_topic, self.qos_profile)
-        self.debug_pub = self.create_publisher(String, 'control_debug', self.qos_profile)
-        self._last_reason = 'init'
 
         # 타이머 설정
         self.timer = self.create_timer(self.timer_period, self.timer_callback)
-        self.get_logger().info(
-            f'drive_speed={self.drive_speed}, steer_max={self.steer_max}'
-        )
+
+        # P 제어 게인
+        self.KP = 3.0
+
+        # 최대 조향값
+        self.MAX_STEERING = 7
+
+        # 한 주기(0.1초)에 조향이 바뀔 수 있는 최대값
+        self.MAX_STEERING_CHANGE = 1
 
     def detection_callback(self, msg: DetectionArray):
         self.detection_data = msg
@@ -95,7 +102,6 @@ class MotionPlanningNode(Node):
             self.steering_command = 0 
             self.left_speed_command = 0 
             self.right_speed_command = 0 
-            self._last_reason = 'lidar_stop'
 
         elif self.traffic_light_data is not None and self.traffic_light_data.data == 'Red':
             # 빨간색 신호등을 감지한 경우
@@ -111,46 +117,58 @@ class MotionPlanningNode(Node):
                         self.steering_command = 0 
                         self.left_speed_command = 0 
                         self.right_speed_command = 0
-                        self._last_reason = 'red_stop'
         else:
-            if self.path_data is None:
-                self.steering_command = 0
-                self._last_reason = 'no_path'
+            if self.path_data is None or len(self.path_data) < 2:
+                target_steering = 0
+
             else:
-                target_slope = DMFL.calculate_slope_between_points(self.path_data[-10], self.path_data[-1])
-                
-                if target_slope > 0:
-                    self.steering_command = self.steer_max
-                elif target_slope < 0:
-                    self.steering_command = -self.steer_max
-                else:
-                    self.steering_command = 0
-                self._last_reason = f'path slope={target_slope:.2f}'
+                # 기존 slope 계산
+                p1 = self.path_data[-10] if len(self.path_data) >= 10 else self.path_data[0]
+                p2 = self.path_data[-1]
+
+                target_slope = DMFL.calculate_slope_between_points(p1, p2)
+
+                # P 제어
+                target_steering = self.KP * target_slope
+
+                # 최대 조향 제한
+                target_steering = max(
+                    -self.MAX_STEERING,
+                    min(self.MAX_STEERING, target_steering)
+                )
+
+# ------------------------------------------------
+# 조향 변화량 제한
+# ------------------------------------------------
+steering_diff = target_steering - self.steering_command
+
+steering_diff = max(
+    -self.MAX_STEERING_CHANGE,
+    min(self.MAX_STEERING_CHANGE, steering_diff)
+)
+
+self.steering_command += steering_diff
+
+# 정수로 변환
+self.steering_command = int(round(self.steering_command))
 
 
-            self.left_speed_command = self.drive_speed
-            self.right_speed_command = self.drive_speed
+            self.left_speed_command = 100  # 예시 속도 값 (255가 최대 속도)
+            self.right_speed_command = 100  # 예시 속도 값 (255가 최대 속도)
 
 
 
-        self.get_logger().info(f"steering: {self.steering_command}, " 
-                               f"left_speed: {self.left_speed_command}, " 
-                               f"right_speed: {self.right_speed_command}")
-
+        self.get_logger().info(
+            f"slope: {target_slope:.3f}, "
+            f"target_steering: {target_steering:.2f}, "
+            f"steering: {self.steering_command}"
+        )
         # 모션 명령 메시지 생성 및 퍼블리시
         motion_command_msg = MotionCommand()
         motion_command_msg.steering = self.steering_command
         motion_command_msg.left_speed = self.left_speed_command
         motion_command_msg.right_speed = self.right_speed_command
         self.publisher.publish(motion_command_msg)
-        dbg = String()
-        tl = self.traffic_light_data.data if self.traffic_light_data is not None else 'none'
-        lidar = int(bool(self.lidar_data.data)) if self.lidar_data is not None else -1
-        dbg.data = (
-            f"reason={self._last_reason} steer={self.steering_command} "
-            f"L={self.left_speed_command} R={self.right_speed_command} tl={tl} lidar={lidar}"
-        )
-        self.debug_pub.publish(dbg)
 
 def main(args=None):
     rclpy.init(args=args)
