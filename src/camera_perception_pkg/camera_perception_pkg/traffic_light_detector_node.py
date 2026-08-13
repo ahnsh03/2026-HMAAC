@@ -61,11 +61,12 @@ class TrafficLightDetector(Node):
         for detection in detection_msg.detections:
             if detection.class_name == 'traffic_light':
 
+                # 13일 C920e 실차 크롭 기준. 점등 LED 후광은 S/V가 교육 기본(100/95)보다 낮음.
                 hsv_ranges = {
-                    'red1': (np.array([0, 100, 95]), np.array([10, 255, 255])),
-                    'red2': (np.array([160, 100, 95]), np.array([179, 255, 255])),
-                    'yellow': (np.array([20, 100, 95]), np.array([30, 255, 255])),
-                    'green': (np.array([40, 100, 95]), np.array([90, 255, 255]))
+                    'red1': (np.array([0, 50, 70]), np.array([12, 255, 255])),
+                    'red2': (np.array([155, 50, 70]), np.array([179, 255, 255])),
+                    'yellow': (np.array([16, 50, 70]), np.array([38, 255, 255])),
+                    'green': (np.array([35, 40, 55]), np.array([95, 255, 255])),
                 }
 
                 # get_traffic_light_color -> Red, Yellow, Green, Unknown

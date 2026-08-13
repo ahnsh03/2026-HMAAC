@@ -20,6 +20,8 @@ PUB_TOPIC_NAME = "topic_control_signal"
 
 # 모션 플랜 발행 주기 (초) - 소수점 필요 (int형은 반영되지 않음)
 TIMER = 0.1
+# 출발 게이트: 연속 Green 횟수 (0.1s × 3 = 0.3s)
+NEED_GREEN_HITS = 3
 
 class MotionPlanningNode(Node):
     def __init__(self):
@@ -51,6 +53,12 @@ class MotionPlanningNode(Node):
         self.steering_command = 0
         self.left_speed_command = 0
         self.right_speed_command = 0
+
+        # 간략 미션: 첫 Green만 보고 출발. 한 번 출발하면 되돌리지 않음.
+        self.require_green_start = self.declare_parameter('require_green_start', True).value
+        self.started = False
+        self.green_hits = 0
+        self.need_green_hits = self.declare_parameter('need_green_hits', NEED_GREEN_HITS).value
         
 
         # 서브스크라이버 설정
@@ -78,6 +86,31 @@ class MotionPlanningNode(Node):
         self.lidar_data = msg
         
     def timer_callback(self):
+        color = self.traffic_light_data.data if self.traffic_light_data is not None else 'None'
+
+        if self.require_green_start and not self.started:
+            if color == 'Green':
+                self.green_hits += 1
+                if self.green_hits >= self.need_green_hits:
+                    self.started = True
+            else:
+                self.green_hits = 0
+            if not self.started:
+                self.steering_command = 0
+                self.left_speed_command = 0
+                self.right_speed_command = 0
+                self.get_logger().info(
+                    f"wait_green color={color} hits={self.green_hits} "
+                    f"steering: {self.steering_command}, "
+                    f"left_speed: {self.left_speed_command}, "
+                    f"right_speed: {self.right_speed_command}"
+                )
+                motion_command_msg = MotionCommand()
+                motion_command_msg.steering = self.steering_command
+                motion_command_msg.left_speed = self.left_speed_command
+                motion_command_msg.right_speed = self.right_speed_command
+                self.publisher.publish(motion_command_msg)
+                return
 
         if self.lidar_data is not None and self.lidar_data.data is True:
             # 라이다가 장애물을 감지한 경우
@@ -85,14 +118,17 @@ class MotionPlanningNode(Node):
             self.left_speed_command = 0 
             self.right_speed_command = 0 
 
-        elif self.traffic_light_data is not None and self.traffic_light_data.data == 'Red':
-            # 빨간색 신호등을 감지한 경우
+        elif (
+            not self.require_green_start
+            and self.traffic_light_data is not None
+            and self.traffic_light_data.data == 'Red'
+            and self.detection_data is not None
+        ):
+            # require_green_start=False 일 때만 기존 적색 근접 정지.
+            # 간략 미션(래치 ON)에서는 출발 후 이 분기를 타지 않음.
             for detection in self.detection_data.detections:
                 if detection.class_name=='traffic_light':
-                    x_min = int(detection.bbox.center.position.x - detection.bbox.size.x / 2) # bbox의 좌측상단 꼭짓점 x좌표
-                    x_max = int(detection.bbox.center.position.x + detection.bbox.size.x / 2) # bbox의 우측하단 꼭짓점 x좌표
-                    y_min = int(detection.bbox.center.position.y - detection.bbox.size.y / 2) # bbox의 좌측상단 꼭짓점 y좌표
-                    y_max = int(detection.bbox.center.position.y + detection.bbox.size.y / 2) # bbox의 우측하단 꼭짓점 y좌표
+                    y_max = int(detection.bbox.center.position.y + detection.bbox.size.y / 2)
 
                     if y_max < 150:
                         # 신호등 위치에 따른 정지명령 결정

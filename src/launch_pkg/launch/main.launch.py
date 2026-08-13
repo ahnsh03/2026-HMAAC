@@ -46,12 +46,12 @@ def generate_launch_description():
             name='lane_info_extractor_node',
             output='screen'
         ),
-        # Node(
-        #     package='camera_perception_pkg',
-        #     executable='traffic_light_detector_node',
-        #     name='traffic_light_detector_node',
-        #     output='screen'
-        # ),
+        Node(
+            package='camera_perception_pkg',
+            executable='traffic_light_detector_node',
+            name='traffic_light_detector_node',
+            output='screen'
+        ),
         # Node(
         #     package='lidar_perception_pkg',
         #     executable='lidar_publisher_node',
