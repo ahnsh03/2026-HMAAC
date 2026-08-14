@@ -43,8 +43,8 @@ ros2 launch launch_pkg main.launch.py \
 python3 src/data_collection/data_collection.py
 ```
 
-`main.launch.py`: Stage1에 **serial_sender 활성**. 신호등 detector 기본 ON (`enable_traffic_light:=false`로 끔). 라이다는 주석.  
-구간 테스트: [wait-green.md](wait-green.md) §6 — `/force_start` 또는 `require_green_start:=false`.  
+`main.launch.py` 인자 전체: [launch-args.md](launch-args.md).  
+구간 테스트: [wait-green.md](wait-green.md) — `/force_start` 또는 `require_green_start:=false`.  
 가이드: [repo-structure-and-realcar-guide.md](repo-structure-and-realcar-guide.md) · [yolo-weights.md](yolo-weights.md) · [controller-tuning.md](controller-tuning.md) · [debug-and-incremental-test.md](debug-and-incremental-test.md)
 
 ## 가중치 스왑 · 정지 검출
