@@ -28,11 +28,8 @@ EVAL_TOPICS = [
     '/lidar_obstacle_info',
     '/lidar_lane1_min',
     '/detections',
-    '/yolov8_lane_info',
     '/yolov8_traffic_light_info',
     '/lane_control_info',
-    '/roi_image',
-    '/path_planning_result',
     '/topic_control_signal',
     '/finish_stop_reason',
     '/tf',
@@ -40,7 +37,8 @@ EVAL_TOPICS = [
 
 VIS_TOPICS = [
     '/yolov8_visualized_img',
-    '/path_visualized_img',
+    '/lane2_control_bev',
+    '/race_viz',
 ]
 
 
@@ -94,7 +92,6 @@ def _start_bag(context, *args, **kwargs):
 
 def generate_launch_description():
     model = LaunchConfiguration('model')
-    use_lane_surface_control = LaunchConfiguration('use_lane_surface_control')
     drive_speed = LaunchConfiguration('drive_speed')
     steer_max = LaunchConfiguration('steer_max')
     steer_k = LaunchConfiguration('steer_k')
@@ -102,6 +99,10 @@ def generate_launch_description():
     steer_rate = LaunchConfiguration('steer_rate')
     control_cutting_idx = LaunchConfiguration('control_cutting_idx')
     control_min_area = LaunchConfiguration('control_min_area')
+    center_mode = LaunchConfiguration('center_mode')
+    row_mid_power = LaunchConfiguration('row_mid_power')
+    near_blend = LaunchConfiguration('near_blend')
+    vehicle_center_x = LaunchConfiguration('vehicle_center_x')
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -112,7 +113,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'debug',
             default_value='true',
-            description='YOLO/path OpenCV debug visualizer nodes',
+            description='One mosaic window: camera | yolo | bev',
         ),
         DeclareLaunchArgument(
             'require_green_start',
@@ -120,9 +121,9 @@ def generate_launch_description():
             description='Wait for Green (or /force_start) before driving. false = section test, drive immediately',
         ),
         DeclareLaunchArgument(
-            'use_lane_surface_control',
-            default_value='true',
-            description='true: teamop lane2 BEV surface P+EMA+slew, false: legacy bang-bang',
+            'green_start_timeout',
+            default_value='15.0',
+            description='Seconds to wait for Green before auto force_start. 0 = never',
         ),
         DeclareLaunchArgument(
             'drive_speed',
@@ -136,7 +137,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'steer_k',
-            default_value='0.028',
+            default_value='0.044',
             description='BEV lane-center P gain [steering step/pixel]',
         ),
         DeclareLaunchArgument(
@@ -151,13 +152,33 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'control_cutting_idx',
-            default_value='0',
-            description='Rows removed from top of filled lane2 BEV for control',
+            default_value='160',
+            description='Rows removed from top of filled lane2 BEV (bag-sweep winner)',
         ),
         DeclareLaunchArgument(
             'control_min_area',
             default_value='1000.0',
             description='Minimum filled BEV lane area for valid control',
+        ),
+        DeclareLaunchArgument(
+            'center_mode',
+            default_value='moments',
+            description='Lane center: moments (blend with near_blend) or row_mid',
+        ),
+        DeclareLaunchArgument(
+            'row_mid_power',
+            default_value='2.0',
+            description='Bottom-row weight power for near center (y+1)^p',
+        ),
+        DeclareLaunchArgument(
+            'near_blend',
+            default_value='1.0',
+            description='Blend β: 0=moments only, 1=row-mid only (bag-sweep winner=1)',
+        ),
+        DeclareLaunchArgument(
+            'vehicle_center_x',
+            default_value='320.0',
+            description='BEV target x for P steer (px). bag eval used 320',
         ),
         DeclareLaunchArgument(
             'record',
@@ -178,7 +199,8 @@ def generate_launch_description():
             package='camera_perception_pkg',
             executable='image_publisher_node',
             name='image_publisher_node',
-            output='screen'
+            output='screen',
+            parameters=[{'logger': False}],
         ),
         _ros_node(
             package='camera_perception_pkg',
@@ -193,11 +215,19 @@ def generate_launch_description():
             name='lane_info_extractor_node',
             output='screen',
             parameters=[{
+                'show_image': False,
                 'control_cutting_idx': ParameterValue(
                     control_cutting_idx, value_type=int
                 ),
                 'control_min_area': ParameterValue(
                     control_min_area, value_type=float
+                ),
+                'center_mode': center_mode,
+                'row_mid_power': ParameterValue(
+                    row_mid_power, value_type=float
+                ),
+                'near_blend': ParameterValue(
+                    near_blend, value_type=float
                 ),
             }],
         ),
@@ -234,21 +264,18 @@ def generate_launch_description():
                 'require_green_start': ParameterValue(
                     LaunchConfiguration('require_green_start'), value_type=bool
                 ),
-                'use_lane_surface_control': ParameterValue(
-                    use_lane_surface_control, value_type=bool
+                'green_start_timeout': ParameterValue(
+                    LaunchConfiguration('green_start_timeout'), value_type=float
                 ),
                 'drive_speed': ParameterValue(drive_speed, value_type=int),
                 'steer_max': ParameterValue(steer_max, value_type=int),
                 'steer_k': ParameterValue(steer_k, value_type=float),
                 'steer_alpha': ParameterValue(steer_alpha, value_type=float),
                 'steer_rate': ParameterValue(steer_rate, value_type=float),
+                'vehicle_center_x': ParameterValue(
+                    vehicle_center_x, value_type=float
+                ),
             }],
-        ),
-        _ros_node(
-            package='decision_making_pkg',
-            executable='path_planner_node',
-            name='path_planner_node',
-            output='screen'
         ),
         _ros_node(
             package='serial_communication_pkg',
@@ -262,11 +289,12 @@ def generate_launch_description():
             name='yolov8_visualizer_node',
             output='screen',
             condition=IfCondition(LaunchConfiguration('debug')),
+            parameters=[{'show_image': False}],
         ),
         _ros_node(
             package='debug_pkg',
-            executable='path_visualizer_node',
-            name='path_visualizer_node',
+            executable='viz_mosaic_node',
+            name='viz_mosaic_node',
             output='screen',
             condition=IfCondition(LaunchConfiguration('debug')),
         ),

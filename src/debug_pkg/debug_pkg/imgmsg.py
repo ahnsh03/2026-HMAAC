@@ -1,6 +1,21 @@
-"""OpenCV 배열 → sensor_msgs/Image. pip OpenCV 5 + Humble cv_bridge 우회."""
+"""OpenCV 배열 ↔ sensor_msgs/Image. pip OpenCV 5 + Humble cv_bridge 우회."""
 import numpy as np
 from sensor_msgs.msg import Image
+
+
+def imgmsg_to_numpy(msg: Image) -> np.ndarray:
+    nchan = 4 if msg.encoding in ('bgra8', 'rgba8') else (
+        1 if msg.encoding in ('mono8', '8UC1') else 3
+    )
+    image = np.frombuffer(msg.data, dtype=np.uint8)
+    image = image.reshape((int(msg.height), int(msg.width), nchan))
+    if msg.encoding in ('rgb8', 'rgba8'):
+        image = image[:, :, :3][:, :, ::-1]
+    elif nchan == 1:
+        image = np.repeat(image, 3, axis=2)
+    elif nchan == 4:
+        image = image[:, :, :3]
+    return np.ascontiguousarray(image)
 
 
 def numpy_to_imgmsg(cvim, encoding='bgr8', header=None) -> Image:

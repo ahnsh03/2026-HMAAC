@@ -157,6 +157,54 @@ def largest_component_center(cv_image: np.ndarray, min_area: float = 1000.0):
 		return None, area
 	return float(moments["m10"] / moments["m00"]), area
 
+
+def row_midpoint_center(cv_image: np.ndarray, power: float = 2.0, min_px: int = 8, min_area: float = 1000.0):
+	"""Row (xmin+xmax)/2 weighted toward the bottom. y=0 is the top of the crop."""
+	if cv_image.size == 0:
+		return None, 0.0
+
+	mask = cv2.convertScaleAbs(cv_image)
+	if mask.ndim == 3:
+		mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
+	binary = mask > 0
+	area = float(np.count_nonzero(binary))
+	if area < min_area:
+		return None, area
+
+	counts = binary.sum(axis=1)
+	valid = counts >= int(min_px)
+	if not np.any(valid):
+		return None, area
+
+	width = binary.shape[1]
+	left = binary.argmax(axis=1)
+	right = width - 1 - np.flip(binary, axis=1).argmax(axis=1)
+	rows = np.flatnonzero(valid)
+	mid = 0.5 * (left[rows].astype(np.float64) + right[rows].astype(np.float64))
+	weights = np.power(rows.astype(np.float64) + 1.0, float(power))
+	weight_sum = float(np.sum(weights))
+	if weight_sum <= 0.0:
+		return None, area
+	return float(np.dot(mid, weights) / weight_sum), area
+
+
+def blend_lane_center(far_x, near_x, blend: float):
+	"""cx = (1-β)·far + β·near. Missing side is skipped."""
+	blend = min(max(float(blend), 0.0), 1.0)
+	far_ok = far_x is not None and np.isfinite(far_x)
+	near_ok = near_x is not None and np.isfinite(near_x)
+	if far_ok and near_ok:
+		return (1.0 - blend) * float(far_x) + blend * float(near_x)
+	if blend <= 0.0 and far_ok:
+		return float(far_x)
+	if blend >= 1.0 and near_ok:
+		return float(near_x)
+	if far_ok:
+		return float(far_x)
+	if near_ok:
+		return float(near_x)
+	return None
+
 def edge_image_postproc(cv_image: np.array, show_image=True):
 	(h, w) = (cv_image.shape[0], cv_image.shape[1])
 	dst_mat = [[round(w * 0.3), round(h * 0.0)], [round(w * 0.7), round(h * 0.0)], [round(w * 0.7), h], [round(w * 0.3), h]]

@@ -7,9 +7,7 @@ WS_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 INSTALL="${WS_ROOT}/install"
 
 WINDOW_NAMES=(
-  lane2_edge_image
-  lane2_bird_img
-  roi_img
+  race_viz
   lane2_control_bev
   path_visualized_img
   yolov8_visualized_img
@@ -37,6 +35,7 @@ NODES=(
   path_planner_node
   serial_sender_node
   yolov8_visualizer_node
+  viz_mosaic_node
   path_visualizer_node
   bev_calibrator_node
 )

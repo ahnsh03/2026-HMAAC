@@ -8,13 +8,11 @@ from rclpy.qos import QoSDurabilityPolicy
 from rclpy.qos import QoSReliabilityPolicy
 
 from std_msgs.msg import String, Bool, Float32, Float32MultiArray
-from interfaces_pkg.msg import PathPlanningResult, DetectionArray, MotionCommand
-from .lib import decision_making_func_lib as DMFL
+from interfaces_pkg.msg import DetectionArray, MotionCommand
 from .node_shutdown import install_shutdown
 
 #---------------Variable Setting---------------
 SUB_DETECTION_TOPIC_NAME = "detections"
-SUB_PATH_TOPIC_NAME = "path_planning_result"
 SUB_TRAFFIC_LIGHT_TOPIC_NAME = "yolov8_traffic_light_info"
 SUB_LIDAR_OBSTACLE_TOPIC_NAME = "lidar_obstacle_info"
 SUB_LIDAR_LANE1_MIN_TOPIC_NAME = "lidar_lane1_min"
@@ -28,15 +26,16 @@ PUB_FINISH_REASON_TOPIC_NAME = "finish_stop_reason"
 TIMER = 0.1
 NEED_GREEN_HITS = 3
 NEED_FINISH_HITS = 3
+GREEN_START_TIMEOUT_S = 15.0
 
 # 라이다 단일: 0–90° 최소거리 ≤ 1.10 m. 카메라는 이 실험에서 쓰지 않음.
 LIDAR_STOP_RMIN = 0.12
-LIDAR_STOP_RMAX = 1.00
+LIDAR_STOP_RMAX = 0.95
 
-# 실차 P: 속도 250, k=0.028에서 점선을 밟지 않음. EMA/slew는 끈 상태가 기본.
+# bag 스윕 승자: cut=160, p=2, β=1, vcx=320. k=0.044.
 DRIVE_SPEED = 250
 STEER_MAX = 7
-STEER_K = 0.028
+STEER_K = 0.044
 STEER_ALPHA = 1.0
 STEER_RATE = 7.0
 VEHICLE_CENTER_X = 320.0
@@ -48,12 +47,19 @@ def _in_closed(value, lo, hi):
     return value is not None and math.isfinite(value) and lo <= value <= hi
 
 
+def _as_bool(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    return str(value).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
 class MotionPlanningNode(Node):
     def __init__(self):
         super().__init__('motion_planner_node')
 
         self.sub_detection_topic = self.declare_parameter('sub_detection_topic', SUB_DETECTION_TOPIC_NAME).value
-        self.sub_path_topic = self.declare_parameter('sub_lane_topic', SUB_PATH_TOPIC_NAME).value
         self.sub_traffic_light_topic = self.declare_parameter('sub_traffic_light_topic', SUB_TRAFFIC_LIGHT_TOPIC_NAME).value
         self.sub_lidar_obstacle_topic = self.declare_parameter('sub_lidar_obstacle_topic', SUB_LIDAR_OBSTACLE_TOPIC_NAME).value
         self.sub_lidar_lane1_min_topic = self.declare_parameter(
@@ -78,7 +84,6 @@ class MotionPlanningNode(Node):
         )
 
         self.detection_data = None
-        self.path_data = None
         self.traffic_light_data = None
         self.lidar_data = None
         self.lane1_min = None
@@ -94,16 +99,17 @@ class MotionPlanningNode(Node):
         self.control_debug = 'init'
 
         self.declare_parameter('require_green_start', True)
+        self.declare_parameter('green_start_timeout', GREEN_START_TIMEOUT_S)
         self.require_green_start = True
         self.started = False
         self.green_hits = 0
+        self.wait_green_t0 = None
         self.need_green_hits = self.declare_parameter('need_green_hits', NEED_GREEN_HITS).value
 
         self.declare_parameter('enable_finish_stop', True)
         self.declare_parameter('need_finish_hits', NEED_FINISH_HITS)
         self.declare_parameter('lidar_stop_rmin', LIDAR_STOP_RMIN)
         self.declare_parameter('lidar_stop_rmax', LIDAR_STOP_RMAX)
-        self.declare_parameter('use_lane_surface_control', True)
         self.declare_parameter('drive_speed', DRIVE_SPEED)
         self.declare_parameter('steer_max', STEER_MAX)
         self.declare_parameter('steer_k', STEER_K)
@@ -117,9 +123,6 @@ class MotionPlanningNode(Node):
 
         self.detection_sub = self.create_subscription(
             DetectionArray, self.sub_detection_topic, self.detection_callback, self.qos_profile
-        )
-        self.path_sub = self.create_subscription(
-            PathPlanningResult, self.sub_path_topic, self.path_callback, self.qos_profile
         )
         self.traffic_light_sub = self.create_subscription(
             String, self.sub_traffic_light_topic, self.traffic_light_callback, self.qos_profile
@@ -146,9 +149,6 @@ class MotionPlanningNode(Node):
 
     def detection_callback(self, msg: DetectionArray):
         self.detection_data = msg
-
-    def path_callback(self, msg: PathPlanningResult):
-        self.path_data = list(zip(msg.x_points, msg.y_points))
 
     def traffic_light_callback(self, msg: String):
         self.traffic_light_data = msg
@@ -218,30 +218,43 @@ class MotionPlanningNode(Node):
         return _in_closed(self.lane1_min, rmin, rmax)
 
     def _finish_source(self, bbox):
-        """no_tl / none / lidar / off. 신호등 박스가 있을 때만 라이다 정지를 연다."""
+        """none / lidar / off. 신호등 없이 라이다 거리만 본다."""
         if not bool(self.get_parameter('enable_finish_stop').value):
             return 'off'
-        if bbox is None:
-            return 'no_tl'
         if self._lidar_ok():
             return 'lidar'
         return 'none'
 
     def timer_callback(self):
-        self.require_green_start = bool(self.get_parameter('require_green_start').value)
+        self.require_green_start = _as_bool(
+            self.get_parameter('require_green_start').value
+        )
         color = self.traffic_light_data.data if self.traffic_light_data is not None else 'None'
 
         if self.require_green_start and not self.started:
-            if color == 'Green':
+            now_s = self.get_clock().now().nanoseconds * 1e-9
+            if self.wait_green_t0 is None:
+                self.wait_green_t0 = now_s
+            timeout_s = float(self.get_parameter('green_start_timeout').value)
+            waited_s = now_s - self.wait_green_t0
+            if timeout_s > 0.0 and waited_s >= timeout_s:
+                self.started = True
+                self.get_logger().warn(
+                    f'force_start: green timeout {waited_s:.1f}s '
+                    f'(limit={timeout_s:.1f}s)'
+                )
+            elif color == 'Green':
                 self.green_hits += 1
                 if self.green_hits >= self.need_green_hits:
                     self.started = True
             else:
                 self.green_hits = 0
             if not self.started:
+                remain = max(0.0, timeout_s - waited_s) if timeout_s > 0.0 else -1.0
                 self._zero_command()
                 self.get_logger().info(
                     f"wait_green color={color} hits={self.green_hits} "
+                    f"remain={remain:.1f}s "
                     f"steering: {self.steering_command}, "
                     f"left_speed: {self.left_speed_command}, "
                     f"right_speed: {self.right_speed_command}"
@@ -287,40 +300,30 @@ class MotionPlanningNode(Node):
         self._publish()
 
     def _follow_path(self):
-        drive_speed = int(self.get_parameter('drive_speed').value)
-        if bool(self.get_parameter('use_lane_surface_control').value):
-            if self._lane_control_is_fresh():
-                self._follow_lane_surface()
-                self.left_speed_command = drive_speed
-                self.right_speed_command = drive_speed
-                return
-
-            lane_lost_speed = int(self.get_parameter('lane_lost_speed').value)
-            self.filtered_steer = 0.0
-            self.limited_steer = 0.0
-            self.steering_command = 0
-            self.left_speed_command = lane_lost_speed
-            self.right_speed_command = lane_lost_speed
-            self.control_debug = (
-                f"ctrl=lane_lost center={self.lane_center_x} "
-                f"area={self.lane_mask_area:.0f}"
-            )
+        # YOLO 차선이 한 번도 안 온 상태(신호등 스킵 출발 포함)는 차선 유실이 아님.
+        # 저속 크롤 대신 첫 유효 center가 올 때까지 정지.
+        if self.lane_control_stamp is None:
+            self._zero_command()
+            self.control_debug = 'ctrl=wait_lane'
             return
 
-        if self.path_data is None:
-            self.steering_command = 0
-            self.control_debug = 'ctrl=bang no_path'
-        else:
-            target_slope = DMFL.calculate_slope_between_points(self.path_data[-10], self.path_data[-1])
-            if target_slope > 0:
-                self.steering_command = int(self.get_parameter('steer_max').value)
-            elif target_slope < 0:
-                self.steering_command = -int(self.get_parameter('steer_max').value)
-            else:
-                self.steering_command = 0
-            self.control_debug = f'ctrl=bang slope={target_slope:.2f}'
-        self.left_speed_command = drive_speed
-        self.right_speed_command = drive_speed
+        drive_speed = int(self.get_parameter('drive_speed').value)
+        if self._lane_control_is_fresh():
+            self._follow_lane_surface()
+            self.left_speed_command = drive_speed
+            self.right_speed_command = drive_speed
+            return
+
+        lane_lost_speed = int(self.get_parameter('lane_lost_speed').value)
+        self.filtered_steer = 0.0
+        self.limited_steer = 0.0
+        self.steering_command = 0
+        self.left_speed_command = lane_lost_speed
+        self.right_speed_command = lane_lost_speed
+        self.control_debug = (
+            f"ctrl=lane_lost center={self.lane_center_x} "
+            f"area={self.lane_mask_area:.0f}"
+        )
 
     def _lane_control_is_fresh(self):
         if self.lane_center_x is None or self.lane_control_stamp is None:

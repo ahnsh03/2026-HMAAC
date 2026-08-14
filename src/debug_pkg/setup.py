@@ -22,6 +22,7 @@ setup(
         'console_scripts': [
             'path_visualizer_node = debug_pkg.path_visualizer_node:main',
             'yolov8_visualizer_node = debug_pkg.yolov8_visualizer_node:main',
+            'viz_mosaic_node = debug_pkg.viz_mosaic_node:main',
             'bev_calibrator_node = debug_pkg.bev_calibrator_node:main',
         ],
     },

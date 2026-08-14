@@ -17,6 +17,8 @@ def generate_launch_description():
     """Stage 3: 인지 A/B. serial/motion 없음.
 
     IPM은 Stage 2에서 맞춘 src* 를 그대로 넘긴다. 가중치만 바꾼다.
+    path_planner / path_visualizer 파일은 여기 참조 때문에 남긴다.
+    live extractor는 3점·ROI를 더 이상 발행하지 않으므로 이 두 노드는 대기만 한다.
     """
     model = LaunchConfiguration("model")
     device = LaunchConfiguration("device")
@@ -75,7 +77,7 @@ def generate_launch_description():
             name="lane_info_extractor_node",
             output="screen",
             parameters=[{
-                "show_image": ParameterValue(show_image, value_type=bool),
+                "show_image": False,
                 **src_params,
             }],
         ),
@@ -84,7 +86,16 @@ def generate_launch_description():
             executable="yolov8_visualizer_node",
             name="yolov8_visualizer_node",
             output="screen",
-            parameters=[{"show_image": True}],
+            parameters=[{"show_image": False}],
+        ),
+        Node(
+            package="debug_pkg",
+            executable="viz_mosaic_node",
+            name="viz_mosaic_node",
+            output="screen",
+            parameters=[{
+                "show_image": ParameterValue(show_image, value_type=bool),
+            }],
         ),
         Node(
             package="decision_making_pkg",
@@ -97,6 +108,6 @@ def generate_launch_description():
             executable="path_visualizer_node",
             name="path_visualizer_node",
             output="screen",
-            parameters=[{"show_image": True}],
+            parameters=[{"show_image": False}],
         ),
     ])

@@ -7,26 +7,18 @@ from rclpy.qos import QoSHistoryPolicy
 from rclpy.qos import QoSDurabilityPolicy
 from rclpy.qos import QoSReliabilityPolicy
 
-from cv_bridge import CvBridge
-
 from sensor_msgs.msg import Image
 from std_msgs.msg import Float32MultiArray
-from interfaces_pkg.msg import TargetPoint, LaneInfo, DetectionArray, BoundingBox2D, Detection
+from interfaces_pkg.msg import DetectionArray
 from .lib import camera_perception_func_lib as CPFL
 from .lib.imgmsg import numpy_to_imgmsg
 from .node_shutdown import close_cv_windows, install_shutdown
 
 #---------------Variable Setting---------------
-# Subscribe할 토픽 이름
 SUB_TOPIC_NAME = "detections"
-
-# Publish할 토픽 이름
-PUB_TOPIC_NAME = "yolov8_lane_info"
-ROI_IMAGE_TOPIC_NAME = "roi_image"  # 추가: ROI 이미지 퍼블리시 토픽
 LANE_CONTROL_TOPIC_NAME = "lane_control_info"
-
-# 화면에 이미지를 처리하는 과정을 띄울것인지 여부: True, 또는 False 중 택1하여 입력
-SHOW_IMAGE = True
+LANE_BEV_TOPIC_NAME = "lane2_control_bev"
+SHOW_IMAGE = False
 #----------------------------------------------
 
 
@@ -35,7 +27,6 @@ class Yolov8InfoExtractor(Node):
         super().__init__('lane_info_extractor_node')
 
         self.sub_topic = self.declare_parameter('sub_detection_topic', SUB_TOPIC_NAME).value
-        self.pub_topic = self.declare_parameter('pub_topic', PUB_TOPIC_NAME).value
         self.show_image = self.declare_parameter('show_image', SHOW_IMAGE).value
         if isinstance(self.show_image, str):
             self.show_image = self.show_image.strip().lower() in ("1", "true", "yes", "on")
@@ -48,36 +39,35 @@ class Yolov8InfoExtractor(Node):
         self.src2_y = int(self.declare_parameter('src2_y', 476).value)
         self.src3_x = int(self.declare_parameter('src3_x', 155).value)
         self.src3_y = int(self.declare_parameter('src3_y', 476).value)
-        self.cutting_idx = int(self.declare_parameter('cutting_idx', 300).value)
-        # teamop 영상 7,699프레임(10 Hz 샘플) 비교 결과:
-        # 전체 BEV가 유효율 98.0%, 고주파 중심 오차 p95 2.14 px로 가장 안정적이었다.
-        self.control_cutting_idx = int(self.declare_parameter('control_cutting_idx', 0).value)
-        self.control_min_area = float(self.declare_parameter('control_min_area', 1000.0).value)
+        # perception_debug / bev_calibrator가 넘기는 예전 ROI 인자. P 제어는 쓰지 않는다.
+        self.declare_parameter('cutting_idx', 300)
+        # 매 콜백 get_parameter. launch:= 와 ros2 param set 모두 바로 먹는다.
+        # bag 스윕 승자: cut=160, p=2, β=1. center_mode:=moments near_blend:=0 이면 예전 모멘트만.
+        self.declare_parameter('control_cutting_idx', 160)
+        self.declare_parameter('control_min_area', 1000.0)
+        self.declare_parameter('center_mode', 'moments')
+        self.declare_parameter('row_mid_power', 2.0)
+        self.declare_parameter('near_blend', 1.0)
 
-        self.cv_bridge = CvBridge()
-
-        # QoS settings
         self.qos_profile = QoSProfile(
             reliability=QoSReliabilityPolicy.RELIABLE,
             history=QoSHistoryPolicy.KEEP_LAST,
             durability=QoSDurabilityPolicy.VOLATILE,
             depth=1
         )
-        
-        self.subscriber = self.create_subscription(DetectionArray, self.sub_topic, self.yolov8_detections_callback, self.qos_profile)
-        self.publisher = self.create_publisher(LaneInfo, self.pub_topic, self.qos_profile)
 
-        # ROI 이미지 퍼블리셔 추가
-        self.roi_image_publisher = self.create_publisher(Image, ROI_IMAGE_TOPIC_NAME, self.qos_profile)
+        self.subscriber = self.create_subscription(
+            DetectionArray, self.sub_topic, self.yolov8_detections_callback, self.qos_profile
+        )
         self.lane_control_publisher = self.create_publisher(
             Float32MultiArray, LANE_CONTROL_TOPIC_NAME, self.qos_profile
+        )
+        self.lane_bev_publisher = self.create_publisher(
+            Image, LANE_BEV_TOPIC_NAME, self.qos_profile
         )
 
         if self.show_image:
             try:
-                cv2.namedWindow('lane2_edge_image', cv2.WINDOW_NORMAL)
-                cv2.namedWindow('lane2_bird_img', cv2.WINDOW_NORMAL)
-                cv2.namedWindow('roi_img', cv2.WINDOW_NORMAL)
                 cv2.namedWindow('lane2_control_bev', cv2.WINDOW_NORMAL)
                 cv2.waitKey(1)
             except Exception as exc:
@@ -87,20 +77,17 @@ class Yolov8InfoExtractor(Node):
     def yolov8_detections_callback(self, detection_msg: DetectionArray):
         if len(detection_msg.detections) == 0:
             self._publish_lane_control(None, 0.0)
-            if self.show_image:
-                blank = np.zeros((480, 640, 3), dtype=np.uint8)
-                cv2.putText(blank, "no detections (waiting YOLO)", (30, 240),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
-                cv2.imshow('lane2_edge_image', blank)
-                cv2.waitKey(1)
+            blank = np.zeros((480, 640, 3), dtype=np.uint8)
+            cv2.putText(blank, "no detections (waiting YOLO)", (30, 240),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+            self._publish_bev_image(blank)
             return
-        
-        lane2_edge_image = CPFL.draw_edges(detection_msg, cls_name='lane2', color=255)
+
         lane2_filled_image = CPFL.draw_filled_masks(
             detection_msg, cls_name='lane2', color=255
         )
 
-        (h, w) = (lane2_edge_image.shape[0], lane2_edge_image.shape[1]) #(480, 640)
+        (h, w) = (lane2_filled_image.shape[0], lane2_filled_image.shape[1])
         dst_mat = [[round(w * 0.3), round(h * 0.0)], [round(w * 0.7), round(h * 0.0)], [round(w * 0.7), h], [round(w * 0.3), h]]
         src_mat = [
             [self.src0_x, self.src0_y],
@@ -109,73 +96,61 @@ class Yolov8InfoExtractor(Node):
             [self.src3_x, self.src3_y],
         ]
 
-        lane2_bird_image = CPFL.bird_convert(lane2_edge_image, srcmat=src_mat, dstmat=dst_mat)
         lane2_filled_bev = CPFL.bird_convert(
             lane2_filled_image, srcmat=src_mat, dstmat=dst_mat
         )
+        control_cutting_idx = max(
+            0, int(self.get_parameter('control_cutting_idx').value)
+        )
+        control_min_area = float(self.get_parameter('control_min_area').value)
+        center_mode = str(self.get_parameter('center_mode').value).strip().lower()
+        row_mid_power = float(self.get_parameter('row_mid_power').value)
+        near_blend = float(self.get_parameter('near_blend').value)
         control_bev = CPFL.roi_rectangle_below(
-            lane2_filled_bev, cutting_idx=self.control_cutting_idx
+            lane2_filled_bev, cutting_idx=control_cutting_idx
         )
-        lane_center_x, mask_area = CPFL.largest_component_center(
-            control_bev, min_area=self.control_min_area
+        far_x, mask_area = CPFL.largest_component_center(
+            control_bev, min_area=control_min_area
         )
+        need_near = center_mode == 'row_mid' or near_blend > 0.0
+        near_x = None
+        if need_near:
+            near_x, near_area = CPFL.row_midpoint_center(
+                control_bev,
+                power=row_mid_power,
+                min_area=control_min_area,
+            )
+            if mask_area <= 0.0:
+                mask_area = near_area
+        if center_mode == 'row_mid':
+            lane_center_x = near_x if near_x is not None else far_x
+        else:
+            lane_center_x = CPFL.blend_lane_center(far_x, near_x, near_blend)
         self._publish_lane_control(lane_center_x, mask_area)
 
-        roi_image = CPFL.roi_rectangle_below(lane2_bird_image, cutting_idx=self.cutting_idx)
-
-        if self.show_image:
-            control_debug = cv2.cvtColor(
-                cv2.convertScaleAbs(control_bev), cv2.COLOR_GRAY2BGR
-            )
-            cv2.line(
+        control_debug = cv2.cvtColor(
+            cv2.convertScaleAbs(control_bev), cv2.COLOR_GRAY2BGR
+        )
+        cv2.line(
+            control_debug,
+            (w // 2, 0),
+            (w // 2, max(0, control_debug.shape[0] - 1)),
+            (255, 0, 0),
+            2,
+        )
+        if (
+            lane_center_x is not None
+            and np.isfinite(lane_center_x)
+            and control_debug.shape[0] > 0
+        ):
+            cv2.circle(
                 control_debug,
-                (w // 2, 0),
-                (w // 2, max(0, control_debug.shape[0] - 1)),
-                (255, 0, 0),
-                2,
+                (round(lane_center_x), control_debug.shape[0] // 2),
+                10,
+                (0, 255, 255),
+                -1,
             )
-            if lane_center_x is not None and control_debug.shape[0] > 0:
-                cv2.circle(
-                    control_debug,
-                    (round(lane_center_x), control_debug.shape[0] // 2),
-                    10,
-                    (0, 255, 255),
-                    -1,
-                )
-            cv2.imshow('lane2_edge_image', lane2_edge_image)
-            cv2.imshow('lane2_bird_img', lane2_bird_image)
-            cv2.imshow('roi_img', roi_image)
-            cv2.imshow('lane2_control_bev', control_debug)
-            cv2.waitKey(1)
-
-        # roi_image를 uint8 형식으로 변환
-        roi_image = cv2.convertScaleAbs(roi_image)  # 64FC1 -> uint8로 변환
-
-        # roi_image를 ROS Image 메시지로 변환
-        try:
-            roi_image_msg = numpy_to_imgmsg(roi_image, encoding="mono8")
-            # ROI 이미지를 퍼블리시
-            self.roi_image_publisher.publish(roi_image_msg)
-        except Exception as e:
-            self.get_logger().error(f"Failed to convert and publish ROI image: {e}")
-        
-        grad = CPFL.dominant_gradient(roi_image, theta_limit=70)
-                
-        target_points = []
-        for target_point_y in range(5, 155, 50):  # 예시로 5에서 155까지 50씩 증가
-            target_point_x = CPFL.get_lane_center(roi_image, detection_height=target_point_y, 
-                                                detection_thickness=10, road_gradient=grad, lane_width=300)
-            
-            target_point = TargetPoint()
-            target_point.target_x = round(target_point_x)
-            target_point.target_y = round(target_point_y)
-            target_points.append(target_point)
-
-        lane = LaneInfo()
-        lane.slope = grad
-        lane.target_points = target_points
-
-        self.publisher.publish(lane)
+        self._publish_bev_image(control_debug)
 
     def _publish_lane_control(self, center_x, mask_area):
         msg = Float32MultiArray()
@@ -184,6 +159,12 @@ class Yolov8InfoExtractor(Node):
             float(mask_area),
         ]
         self.lane_control_publisher.publish(msg)
+
+    def _publish_bev_image(self, image):
+        self.lane_bev_publisher.publish(numpy_to_imgmsg(image, encoding='bgr8'))
+        if self.show_image:
+            cv2.imshow('lane2_control_bev', image)
+            cv2.waitKey(1)
 
 
 def main(args=None):
@@ -199,6 +180,6 @@ def main(args=None):
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
-  
+
 if __name__ == '__main__':
     main()
