@@ -1,0 +1,231 @@
+From cd76bf367bdff38d8f289e35bb00b4dc70189d9d Mon Sep 17 00:00:00 2001
+From: unknown <qkrtjdghks2002@gmail.com>
+Date: Thu, 13 Aug 2026 21:33:31 +0900
+Subject: [PATCH] =?UTF-8?q?-=20motion=5Fplanner=5Fnode.py=20:=20=EC=A1=B0?=
+ =?UTF-8?q?=ED=96=A5=EA=B0=81=20=ED=81=AC=EA=B8=B0=EC=97=90=20=EB=94=B0?=
+ =?UTF-8?q?=EB=A5=B8=20=EC=A7=81=EC=A7=84=20=EA=B0=80=EC=86=8D(drive=5Fspe?=
+ =?UTF-8?q?ed=5Fstraight)=20=EB=B0=8F=20=EA=B3=A1=EC=84=A0=20=EA=B0=90?=
+ =?UTF-8?q?=EC=86=8D(drive=5Fspeed=5Fcorner)=20=EB=A1=9C=EC=A7=81=20?=
+ =?UTF-8?q?=EC=B6=94=EA=B0=80=20=EB=B0=8F=20slope=5Fdeadband=20=EB=B0=8F?=
+ =?UTF-8?q?=20max=5Fslope=5Fangle=20=ED=8C=8C=EB=9D=BC=EB=AF=B8=ED=84=B0?=
+ =?UTF-8?q?=20=EB=8F=84=EC=9E=85=20-=20driving.ino=20:=20=EB=B9=84?=
+ =?UTF-8?q?=EB=A1=80(P)=20PWM=20=EC=A0=9C=EC=96=B4=EB=A1=9C=20=EB=B3=80?=
+ =?UTF-8?q?=EA=B2=BD=20-=20main.launch.py=20:=20drive=5Fspeed=5Fstraight?=
+ =?UTF-8?q?=20=EB=B0=8F=20drive=5Fspeed=5Fcorner=20launch=20=ED=8C=8C?=
+ =?UTF-8?q?=EB=9D=BC=EB=AF=B8=ED=84=B0=20=EC=B6=94=EA=B0=80?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/control/driving/driving.ino               | 41 +++++++++++------
+ .../motion_planner_node.py                    | 45 ++++++++++++++-----
+ src/launch_pkg/launch/main.launch.py          | 16 ++++++-
+ 3 files changed, 76 insertions(+), 26 deletions(-)
+
+diff --git a/src/control/driving/driving.ino b/src/control/driving/driving.ino
+index e0c97f1..7b262f1 100644
+--- a/src/control/driving/driving.ino
++++ b/src/control/driving/driving.ino
+@@ -10,8 +10,11 @@ const int FORWARD_LEFT_1 = 6;
+ const int FORWARD_LEFT_2 =7;
+ const int POT = A2;
+ 
+-// 조향 속도 상수
+-const int STEERING_SPEED = 128;
++// 조향 속도 및 PWM 제한 상수 (Smooth Proportional Control)
++const int MIN_STEERING_PWM = 80;   // 정지 마찰 극복 최소 PWM
++const int MAX_STEERING_PWM = 200;  // 최대 조향 PWM 속도
++const int DEADBAND_RESISTANCE = 4; // 저항 오차 사불감대
++const float KP_STEER = 3.5;        // 비례 게인
+ 
+ // 가변저항 값 범위
+ const int resistance_most_left = 938;
+@@ -29,8 +32,8 @@ unsigned long lastCommandTime = 0; // 마지막 명령 처리 시간
+ const unsigned int COMMAND_INTERVAL = 50; // 명령 처리 간 최소 대기 시간(ms)
+ 
+ // 함수 선언
+-void steerRight();
+-void steerLeft();
++void steerRight(int speed);
++void steerLeft(int speed);
+ void maintainSteering();
+ void setLeftMotorSpeed(int speed);
+ void setRightMotorSpeed(int speed);
+@@ -65,13 +68,23 @@ void loop() {
+         resistance = analogRead(POT);
+         mapped_resistance = map(resistance, resistance_most_left, resistance_most_right, -MAX_STEERING_STEP, MAX_STEERING_STEP + 1);
+ 
+-        // 조향 상태에 따라 동작 제어
+-        if (mapped_resistance == angle) {
++        // 목표 조향각(angle)에 해당하는 목표 포텐셔미터 저항값 계산
++        int target_resistance = map(angle, -MAX_STEERING_STEP, MAX_STEERING_STEP, resistance_most_right, resistance_most_left);
++        int res_error = target_resistance - resistance;
++        int abs_error = abs(res_error);
++
++        // 비례(P) PWM 제어 적용
++        if (abs_error <= DEADBAND_RESISTANCE) {
+             maintainSteering();
+-        } else if (mapped_resistance > angle) {
+-            steerLeft();
+         } else {
+-            steerRight();
++            int pwm_speed = (int)(MIN_STEERING_PWM + KP_STEER * abs_error);
++            pwm_speed = constrain(pwm_speed, MIN_STEERING_PWM, MAX_STEERING_PWM);
++
++            if (res_error > 0) {
++                steerLeft(pwm_speed);
++            } else {
++                steerRight(pwm_speed);
++            }
+         }
+ 
+         // 모터 속도 설정
+@@ -83,15 +96,15 @@ void loop() {
+     }
+ }
+ 
+-// 조향 제어 함수
+-void steerRight() {
+-    analogWrite(STEERING_1, STEERING_SPEED);
++// 조향 제어 함수 (가변 PWM 적용)
++void steerRight(int speed) {
++    analogWrite(STEERING_1, speed);
+     analogWrite(STEERING_2, LOW);
+ }
+ 
+-void steerLeft() {
++void steerLeft(int speed) {
+     analogWrite(STEERING_1, LOW);
+-    analogWrite(STEERING_2, STEERING_SPEED);
++    analogWrite(STEERING_2, speed);
+ }
+ 
+ void maintainSteering() {
+diff --git a/src/decision_making_pkg/decision_making_pkg/motion_planner_node.py b/src/decision_making_pkg/decision_making_pkg/motion_planner_node.py
+index 7eecc38..081e5e3 100644
+--- a/src/decision_making_pkg/decision_making_pkg/motion_planner_node.py
++++ b/src/decision_making_pkg/decision_making_pkg/motion_planner_node.py
+@@ -18,8 +18,11 @@ PUB_TOPIC_NAME = "topic_control_signal"
+ 
+ # 저속 첫 주행 기본값 (launch: drive_speed:= / steer_max:= 로 덮어쓰기)
+ # 문서: docs/team/lowspeed-tuning.md
+-DEFAULT_DRIVE_SPEED = 60   # 0~255, 안정화 후 80~120 등으로 상향
++DEFAULT_DRIVE_SPEED = 60   # 0~255, 기본 속도
+ DEFAULT_STEER_MAX = 7      # driving.ino MAX_STEERING_STEP 과 일치
++DEFAULT_MAX_SLOPE_ANGLE = 35.0  # steer_max에 해당하는 경로 기울기 각도(도)
++DEFAULT_SLOPE_DEADBAND = 2.0    # 이 각도 미만은 직진(조향 0) 사불감대
++DEFAULT_STRAIGHT_STEER_THRESHOLD = 1 # 조향 크기(절대값)이 이 이하일 때 직진 속도 적용
+ #----------------------------------------------
+ 
+ # 모션 플랜 발행 주기 (초) - 소수점 필요 (int형은 반영되지 않음)
+@@ -39,6 +42,11 @@ class MotionPlanningNode(Node):
+         self.timer_period = self.declare_parameter('timer', TIMER).value
+         self.drive_speed = int(self.declare_parameter('drive_speed', DEFAULT_DRIVE_SPEED).value)
+         self.steer_max = int(self.declare_parameter('steer_max', DEFAULT_STEER_MAX).value)
++        self.drive_speed_straight = int(self.declare_parameter('drive_speed_straight', self.drive_speed + 15).value)
++        self.drive_speed_corner = int(self.declare_parameter('drive_speed_corner', max(20, self.drive_speed - 15)).value)
++        self.max_slope_angle = float(self.declare_parameter('max_slope_angle', DEFAULT_MAX_SLOPE_ANGLE).value)
++        self.slope_deadband = float(self.declare_parameter('slope_deadband', DEFAULT_SLOPE_DEADBAND).value)
++        self.straight_steer_threshold = int(self.declare_parameter('straight_steer_threshold', DEFAULT_STRAIGHT_STEER_THRESHOLD).value)
+ 
+         # QoS 설정
+         self.qos_profile = QoSProfile(
+@@ -73,7 +81,7 @@ class MotionPlanningNode(Node):
+         # 타이머 설정
+         self.timer = self.create_timer(self.timer_period, self.timer_callback)
+         self.get_logger().info(
+-            f'drive_speed={self.drive_speed}, steer_max={self.steer_max}'
++            f'drive_speed={self.drive_speed} (straight={self.drive_speed_straight}, corner={self.drive_speed_corner}), steer_max={self.steer_max}'
+         )
+ 
+     def detection_callback(self, msg: DetectionArray):
+@@ -116,20 +124,35 @@ class MotionPlanningNode(Node):
+             if self.path_data is None:
+                 self.steering_command = 0
+                 self._last_reason = 'no_path'
++                calculated_speed = self.drive_speed
+             else:
+                 target_slope = DMFL.calculate_slope_between_points(self.path_data[-10], self.path_data[-1])
+                 
+-                if target_slope > 0:
+-                    self.steering_command = self.steer_max
+-                elif target_slope < 0:
+-                    self.steering_command = -self.steer_max
+-                else:
++                if target_slope == 'inf':
+                     self.steering_command = 0
+-                self._last_reason = f'path slope={target_slope:.2f}'
+-
++                    self._last_reason = 'path slope=inf'
++                else:
++                    abs_slope = abs(target_slope)
++                    if abs_slope < self.slope_deadband:
++                        self.steering_command = 0
++                    else:
++                        # 기울기에 비례하여 부드럽게 [-steer_max, +steer_max] 범위로 양자화
++                        steer_float = (target_slope / self.max_slope_angle) * self.steer_max
++                        clamped_steer = max(-self.steer_max, min(self.steer_max, round(steer_float)))
++                        self.steering_command = int(clamped_steer)
++                    self._last_reason = f'path slope={target_slope:.2f}'
++
++                # 직진/곡선 조향각에 따른 속도 가감속 로직
++                abs_steer = abs(self.steering_command)
++                if abs_steer <= self.straight_steer_threshold:
++                    calculated_speed = self.drive_speed_straight
++                else:
++                    steer_ratio = (abs_steer - self.straight_steer_threshold) / max(1, (self.steer_max - self.straight_steer_threshold))
++                    calculated_speed = int(self.drive_speed_straight - steer_ratio * (self.drive_speed_straight - self.drive_speed_corner))
++                    calculated_speed = max(self.drive_speed_corner, min(self.drive_speed_straight, calculated_speed))
+ 
+-            self.left_speed_command = self.drive_speed
+-            self.right_speed_command = self.drive_speed
++            self.left_speed_command = calculated_speed
++            self.right_speed_command = calculated_speed
+ 
+ 
+ 
+diff --git a/src/launch_pkg/launch/main.launch.py b/src/launch_pkg/launch/main.launch.py
+index 12608d7..004b308 100644
+--- a/src/launch_pkg/launch/main.launch.py
++++ b/src/launch_pkg/launch/main.launch.py
+@@ -28,6 +28,8 @@ def generate_launch_description():
+     device = LaunchConfiguration("device")
+     threshold = LaunchConfiguration("threshold")
+     drive_speed = LaunchConfiguration("drive_speed")
++    drive_speed_straight = LaunchConfiguration("drive_speed_straight")
++    drive_speed_corner = LaunchConfiguration("drive_speed_corner")
+     steer_max = LaunchConfiguration("steer_max")
+     data_source = LaunchConfiguration("data_source")
+     cam_num = LaunchConfiguration("cam_num")
+@@ -67,7 +69,17 @@ def generate_launch_description():
+         DeclareLaunchArgument(
+             "drive_speed",
+             default_value="60",
+-            description="Left/right wheel PWM for low-speed first runs (0-255)",
++            description="Left/right wheel PWM base speed (0-255)",
++        ),
++        DeclareLaunchArgument(
++            "drive_speed_straight",
++            default_value="75",
++            description="Straight driving wheel PWM speed (0-255)",
++        ),
++        DeclareLaunchArgument(
++            "drive_speed_corner",
++            default_value="45",
++            description="Corner driving wheel PWM speed (0-255)",
+         ),
+         DeclareLaunchArgument(
+             "steer_max",
+@@ -153,6 +165,8 @@ def generate_launch_description():
+             output="screen",
+             parameters=[{
+                 "drive_speed": ParameterValue(drive_speed, value_type=int),
++                "drive_speed_straight": ParameterValue(drive_speed_straight, value_type=int),
++                "drive_speed_corner": ParameterValue(drive_speed_corner, value_type=int),
+                 "steer_max": ParameterValue(steer_max, value_type=int),
+             }],
+         ),
+-- 
+2.53.0
+

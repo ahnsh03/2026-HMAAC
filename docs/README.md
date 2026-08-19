@@ -44,6 +44,7 @@ docs/
     debug-and-incremental-test.md
     notebooks/kingo_car.ipynb
     cheat-sheet.md
+    archive/            # 폐기 브랜치 차이분 백업
 ```
 
 ## 작성 원칙
@@ -61,6 +62,7 @@ docs/
 - [YOLO 가중치 적용](team/yolo-weights.md)
 - [teamop vs team14 실차 분석](team/teamop-vs-team14.md)
 - [제어기 튜닝 아이디어](team/controller-tuning.md)
+- [폐기 브랜치 백업 (newmp · TEAMMODE)](team/archive/README.md)
 - [초록 출발 최소 설계](team/wait-green.md)
 - [신호등 HSV 튜닝 (13일)](team/tl-hsv-tuning.md)
 - [소단위 디버그 · 시각화 · 로깅](team/debug-and-incremental-test.md)
