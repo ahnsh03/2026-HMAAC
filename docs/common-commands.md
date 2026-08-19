@@ -164,6 +164,7 @@ colcon build --symlink-install
 
 source install/setup.bash
 ros2 launch launch_pkg main.launch.py
+# 인자 목록: team/launch-args.md
 ```
 
 데이터 수집:
