@@ -184,7 +184,7 @@ python3 src/data_collection/data_collection.py
 
 ```bash
 # 경로 한 번만
-W=$HOME/ros2_ws/src/camera_perception_pkg/camera_perception_pkg/weights
+W=$HOME/ros2_ws/weights
 ls "$W"/*.pt
 ```
 
@@ -193,7 +193,7 @@ ls "$W"/*.pt
 ```bash
 # 1순위 주행 기본
 ros2 launch launch_pkg main.launch.py \
-  model:=$W/teamop_best.pt device:=cuda:0 drive_speed:=50
+  model:=$W/teamop_best.pt drive_speed:=50
 # 차선만 A/B
 # model:=$W/best_psh.pt
 
@@ -212,13 +212,15 @@ ros2 launch launch_pkg main.launch.py \
 
 ```bash
 ros2 launch launch_pkg main.launch.py \
-  model:=$W/teamop_best.pt device:=cuda:0 drive_speed:=50
+  model:=$W/teamop_best.pt drive_speed:=50
 
 ros2 launch launch_pkg main.launch.py \
-  model:=$W/teamop_best.pt device:=cuda:0 drive_speed:=40 threshold:=0.4
+  model:=$W/teamop_best.pt drive_speed:=40
+# threshold 는 main 인자가 아니다. 띄운 뒤 바꾼다:
+#   ros2 param set /yolov8_node threshold 0.4
 
 ros2 launch launch_pkg main.launch.py \
-  model:=$W/teamop_best.pt device:=cuda:0 drive_speed:=60
+  model:=$W/teamop_best.pt drive_speed:=60
 ```
 
 ### 6-3. 정지 검출 합격 체크 (매 가중치마다)
@@ -249,7 +251,7 @@ ros2 launch launch_pkg camera_only.launch.py cam_num:=0
 
 # 3) 인지 (모터 없음)
 ros2 launch launch_pkg perception_debug.launch.py \
-  model:=$W/teamop_best.pt device:=cuda:0 cam_num:=0
+  model:=$W/teamop_best.pt cam_num:=0
 
 # 4) IPM 트랙바 (인지 launch 뜬 채)
 ros2 run debug_pkg bev_calibrator_node   # p=출력 s=저장
@@ -257,13 +259,12 @@ ros2 run debug_pkg bev_calibrator_node   # p=출력 s=저장
 # 5) 세션 bag
 ./scripts/run_session.sh
 
-# 6) 폐루프 + HUD
+# 6) 폐루프 + race_viz (debug:=true 가 기본)
 ros2 launch launch_pkg main.launch.py \
-  model:=$W/teamop_best.pt device:=cuda:0 cam_num:=0 drive_speed:=50
-ros2 launch launch_pkg debug_overlay.launch.py
+  model:=$W/teamop_best.pt drive_speed:=50
 
-# 7) 라이다 장착
-ros2 launch launch_pkg lidar_debug.launch.py
+# 7) 라이다만 확인 (모터·시리얼 없음)
+ros2 launch launch_pkg sensor_bag.launch.py lidar:=true
 
 ./scripts/topic_rates.sh
 python3 tools/dump_bev.py /tmp/bev.png
@@ -296,7 +297,7 @@ git commit -m "메시지"
 git push
 ```
 
-실차 후보 `.pt`는 [`camera_perception_pkg/.../weights/`](../src/camera_perception_pkg/camera_perception_pkg/weights/)에 둔다 ([team/yolo-weights.md](team/yolo-weights.md)). 원격 push는 팀 합의 후(용량·LFS).
+실차 후보 `.pt`는 레포 루트 [`weights/`](../weights/)에 둔다 ([team/yolo-weights.md](team/yolo-weights.md)). 원격 push는 팀 합의 후(용량·LFS).
 
 ---
 

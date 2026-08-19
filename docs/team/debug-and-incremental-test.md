@@ -18,8 +18,8 @@
 | 4 | IPM/BEV | `bev_calibrator_node` 트랙바 | OFF | 차선이 BEV에서 세로로 서고 ROI에 보임 |
 | 5 | 손주행 로그 | `data_collection` 또는 perception + `run_session.sh` | 손/OFF | 실패 구간 bag·영상 경로 기록 |
 | 6 | 저속 폐루프 | `main.launch.py` + bag | ON 저속 | 이탈 없이 직선→코너 |
-| 7 | 라이다 장착 | `lidar_debug.launch.py` | OFF | 스캔 방향·보넷 사각 확인 |
-| 8 | 신호등 | `traffic_light_detector` 주석 해제 | 대기 | YOLO 박스 + HSV 색 String |
+| 7 | 라이다 장착 | `sensor_bag.launch.py lidar:=true` | OFF | 스캔 방향·보넷 사각 확인 |
+| 8 | 신호등 | `main.launch.py` (기본 ON) | 대기 | YOLO 박스 + HSV 색 String |
 
 가중치 스왑은 **스테이지 3에서만** 한다. 제어가 켜진 채로 `.pt`를 바꾸지 말 것.
 
@@ -34,28 +34,29 @@
 | `yolov8_visualizer_node` | `/image_raw`, `/detections` | `/yolov8_visualized_img` | 박스·세그 마스크 오버레이. Lifecycle이지만 `main()`이 configure/activate |
 | `path_visualizer_node` | `/roi_image`, `/path_planning_result` | `/path_visualized_img` | ROI 위 경로 점 |
 | `bev_calibrator_node` | `/detections` | (창) | **트랙바로 IPM `src_mat` 튜닝** |
-| `control_hud_node` | image + lane + control | `/control_hud_img` | 조향·속도·타겟을 한 화면에 |
-| `lidar_scan_visualizer_node` | `/lidar_raw` (또는 processed) | `/lidar_visualized_img` | 보넷 장착 정렬용 top-down |
-| `marker_node` | 키/`/debug_marker_cmd` | `/debug_markers` | START/LAP1/LAP2/STOP_TRY |
+| `viz_mosaic_node` | `/image_raw`, `/yolov8_visualized_img`, `/lane2_control_bev` | `/race_viz` | 한 창에 camera\|yolo / bev |
 
-`main.launch.py`에는 visualizer가 **없다.** 인지 확인은 `perception_debug.launch.py`를 쓴다.
+`main.launch.py`는 `debug:=true`(기본)일 때 `yolov8_visualizer_node` + `viz_mosaic_node`를 같이 띄운다. **`race_viz` 창 하나**가 주행 중 기본 화면이다. `debug:=false`면 창이 없다.
+
+> 예전에 있던 `control_hud_node` · `lidar_scan_visualizer_node` · `marker_node`는 `race`가 `viz_mosaic_node`로 통합하며 정리했다. 특히 `control_hud_node`가 보던 `/control_debug` 토픽은 더 이상 발행되지 않는다(모션 로그 문자열로 흡수). 옛 노드가 필요하면 `backup/pre-race-merge-2026` 태그에 있다.
 
 ### 패키지 밖 디버그
 
 | 위치 | 하는 일 | 함정 |
 |------|---------|------|
 | `lane_info_extractor` `show_image` | edge / BEV / ROI imshow | `src_mat` 기본값이 교육용 하드코딩. 장착각이 다르면 중심 편향 |
-| `image_publisher` | `/image_raw` | 코드 기본 `DATA_SOURCE='video'`. 실차는 **launch에서 `data_source:=camera`** |
+| `image_publisher` | `/image_raw` | 코드 기본 `DATA_SOURCE='camera'`, `CAM_NUM=2`. `main.launch.py`는 이 값을 안 덮어쓴다 |
 | `data_collection.py` | 손주행·`c`/`v` | ROS bag과 **별개**. 학습 프레임용 |
-| lidar 3노드 | `/lidar_raw` → Bool | 전용 그림은 `lidar_scan_visualizer` |
+| lidar 3노드 | `/lidar_raw` → `/lidar_obstacle_info`, `/lidar_lane1_min` | 전용 그림 노드는 없다. `ros2 topic echo /lidar_lane1_min` |
 
 ```text
 image_raw → yolov8 → detections
                  ├─ yolov8_visualizer
                  ├─ bev_calibrator (트랙바)
-                 └─ lane_info_extractor → roi_image + yolov8_lane_info
-                                              ├─ path_planner → path_visualizer
-                                              └─ motion → serial (main만)
+                 └─ lane_info_extractor → lane_control_info + lane2_control_bev
+                                              └─ motion_planner → serial (main만)
+
+  path_planner_node 는 main.launch.py 에서 띄우지 않는다 (조향은 lane_control_info)
 ```
 
 ---
@@ -70,10 +71,9 @@ image_raw → yolov8 → detections
 | P0 | `c920_setup.sh` | 포커스 잠금, 학습 분포(`match_train`) |
 | P0 | `bev_calibrator` 트랙바 | 장착각 ≠ 하드코딩 IPM |
 | P0 | `run_session.sh` + bag | 사후분석 |
-| P1 | `control_hud` · `control_debug` | 명령이 왜 나왔는지 |
-| P1 | `lidar_scan_visualizer` | 보넷 위 장착 방향 |
+| P1 | motion 로그 `ctrl=` 필드 | 명령이 왜 나왔는지 ([controller-tuning](controller-tuning.md) §4) |
 | P1 | `dump_roi.py` / `dump_bev.py` | imshow 없이 PNG+행 픽셀 |
-| P1 | `marker_node` · `topic_rates.sh` | 랩 시각 · Hz |
+| P1 | `topic_rates.sh` · `/finish_stop_reason` | Hz · 정지 사유 |
 | P2 | TL HSV 디버그 이미지 | **Plan B** — 색 오판 때만 |
 
 시뮬에서 이식: `dump_roi`/`dump_bev`/`topic_rates`. Gazebo GT(`lap_monitor`, `lane_gt`)는 **이식하지 않음**.
@@ -157,7 +157,7 @@ source /opt/ros/humble/setup.bash
 source ~/ros2_ws/install/setup.bash
 export ROS_LOCALHOST_ONLY=1
 cd ~/ros2_ws
-W=$HOME/ros2_ws/src/camera_perception_pkg/camera_perception_pkg/weights
+W=$HOME/ros2_ws/weights
 ```
 
 ### 5-1. 카메라만
@@ -183,7 +183,7 @@ USB를 뽑았다 꽂으면 다시 실행.
 
 ```bash
 ros2 launch launch_pkg perception_debug.launch.py \
-  model:=$W/teamop_best.pt device:=cuda:0 cam_num:=0
+  model:=$W/teamop_best.pt cam_num:=0
 
 ros2 topic echo /detections --once
 ros2 topic echo /yolov8_lane_info --once
@@ -209,12 +209,15 @@ ros2 run debug_pkg bev_calibrator_node
 반영:
 
 ```bash
-ros2 launch launch_pkg perception_debug.launch.py \
-  model:=$W/teamop_best.pt device:=cuda:0 \
-  src0_x:=238 src0_y:=316 src1_x:=402 src1_y:=313 \
-  src2_x:=501 src2_y:=476 src3_x:=155 src3_y:=476 \
-  cutting_idx:=300
+# 주의: src0_x… 와 cutting_idx 는 launch 인자가 아니다. 노드 파라미터로 넣는다.
+ros2 param set /lane_info_extractor_node src0_x 238
+ros2 param set /lane_info_extractor_node src0_y 316
+# … src3_y 까지. 영구 반영은 lane_info_extractor_node.py 의 기본값을 고친다.
 ```
+
+`p` 키가 찍어 주는 줄은 `src0_x:=238 …` 형식이지만 **그대로 launch에 넘길 수는 없다.**
+`perception_debug.launch.py`가 받는 인자는 `model` `device` `threshold` `cam_num` `show_image`
+다섯 개뿐이다 ([launch-args.md](launch-args.md) §3). 숫자를 옮겨 적는 용도로만 쓴다.
 
 원샷 덤프:
 
@@ -225,14 +228,18 @@ python3 tools/dump_roi.py /tmp/roi.png
 
 ### 5-5. 세션 로깅 (사후분석)
 
+`main.launch.py`는 `record:=true`가 기본이라 **그냥 띄우면 bag이 같이 돈다.**
+따로 폴더·`meta.json`을 남기고 싶을 때만 `run_session.sh`를 쓴다.
+
 ```bash
-./scripts/run_session.sh
-# 안내된 SESSION 폴더에 bag + meta.json
-# 다른 터미널에서 launch (perception 또는 main)
+# 터미널 1
+ros2 launch launch_pkg main.launch.py record:=false
+# 터미널 2
+./scripts/run_session.sh     # SESSION 폴더에 bag + meta.json + notes.txt
 ```
 
-마커 (창이 포커스일 때): `s` START · `1` LAP1 · `2` LAP2 · `t` STOP_TRY  
-또는 `ros2 topic pub --once /debug_marker_cmd std_msgs/String "data: START"`
+수동 마커 노드는 없어졌다. 랩 구분은 `notes.txt`에 시각을 적거나
+`ros2 topic echo /finish_stop_reason`으로 정지 사유를 받는다.
 
 재생:
 
@@ -249,26 +256,28 @@ ros2 bag play ~/hmaac_logs/<TS>/bag
 ```bash
 ./scripts/run_session.sh
 ros2 launch launch_pkg main.launch.py \
-  model:=$W/teamop_best.pt device:=cuda:0 \
-  data_source:=camera cam_num:=0 drive_speed:=50
+  model:=$W/teamop_best.pt drive_speed:=50
 ```
 
-HUD: `ros2 run debug_pkg control_hud_node`  
-토픽: `/topic_control_signal`, `/control_debug`
+화면: `race_viz` 창 (`debug:=true` 기본).
+토픽: `/topic_control_signal`, `/lane_control_info`, `/finish_stop_reason`.
+조향이 왜 그렇게 나왔는지는 `motion_planner_node` 로그의 `ctrl=` 필드를 본다
+([controller-tuning.md](controller-tuning.md) §4).
 
 ### 5-7. 라이다 (보넷)
 
 ```bash
-ros2 launch launch_pkg lidar_debug.launch.py
-# OpenCV top-down: 전방이 위쪽인지, 차체가 가리는 부채꼴이 어디인지
+ros2 launch launch_pkg sensor_bag.launch.py lidar:=true processed:=true
+ros2 topic echo /lidar_lane1_min      # 전방 최소거리 (정지 판정 입력)
 ```
 
 `lidar_processor`의 `rotate`/`flip` offset은 그림 보고 맞춘다. 미션 정지는 그 다음.
 
 ### 5-8. 신호등
 
-`main.launch.py`에서 `traffic_light_detector_node` 주석 해제.  
-박스 = visualizer, 색 = `ros2 topic echo /yolov8_traffic_light_info`.
+`traffic_light_detector_node`는 `main.launch.py`에서 **항상 켜진다** (끄는 인자 없음).  
+박스 = `race_viz`, 색 = `ros2 topic echo /yolov8_traffic_light_info`.  
+초록 대기를 건너뛰려면 `require_green_start:=false` 또는 `/force_start` ([wait-green.md](wait-green.md)).
 
 ---
 
@@ -283,7 +292,11 @@ ros2 launch launch_pkg lidar_debug.launch.py
   src_mat.json  # 캘리브 시
 ```
 
-`scripts/record_eval_bag.sh`가 넣는 토픽: `image_raw`, `detections`, `yolov8_lane_info`, `path_planning_result`, `topic_control_signal`, (있으면) TL/lidar/visualized/control_debug/debug_markers.
+`scripts/record_eval_bag.sh`가 넣는 토픽 (실제 배열):
+`/image_raw` `/lidar_raw` `/lidar_processed` `/lidar_obstacle_info` `/lidar_lane1_min`
+`/detections` `/yolov8_traffic_light_info` `/lane_control_info` `/topic_control_signal`
+`/finish_stop_reason`, 그리고 `SKIP_VISUALIZED=1`이 아니면 `/yolov8_visualized_img`
+`/lane2_control_bev` `/race_viz`. 떠 있는 토픽만 골라 담는다.
 
 Hz 한 방: `./scripts/topic_rates.sh`
 

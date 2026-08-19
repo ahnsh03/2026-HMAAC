@@ -44,7 +44,7 @@
 ./scripts/record_eval_bag.sh ~/hmaac_logs/manual/bag
 ```
 
-디버그 시각화는 `perception_debug` / `debug_overlay` 가 `/yolov8_visualized_img` `/path_visualized_img` `/control_hud_img` 를 켠다. bag 스크립트가 **떠 있는 토픽만** 고른다.
+디버그 시각화는 `main.launch.py`(`debug:=true` 기본)와 `perception_debug` 가 `/yolov8_visualized_img` `/lane2_control_bev` `/race_viz` 를 켠다. bag 스크립트가 **떠 있는 토픽만** 고른다.
 
 ### 센서 생존 확인
 
@@ -112,7 +112,7 @@ python3 src/data_collection/data_collection.py
 | 2 | | | | | | |
 | 3 | | | | | | |
 
-수동 마커: `ros2 run debug_pkg marker_node` (s/1/2/t) 또는 `ros2 topic pub --once /debug_marker_cmd std_msgs/String "data: START"`  
+수동 마커 노드는 없어졌다. 시각은 세션 `notes.txt`에 적고, 정지 사유는 `ros2 topic echo /finish_stop_reason` 으로 받는다.  
 시트 예: `12:05:01 START` / `12:06:10 LAP1` / `12:07:20 LAP2` / `12:07:35 STOP_TRY`
 
 ## 내일 착수 순서

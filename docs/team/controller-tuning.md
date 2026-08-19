@@ -1,189 +1,208 @@
-# 제어기 튜닝 — 분석과 실험 순서
+# 제어기 튜닝 — 지금 도는 코드와 남은 노브
 
-목적: **주행 기본은 `teamop`.** `best_psh`는 차선만 A/B(신호등 약함). `best_psh_v2`는 차선이 없어 쓰지 않는다.  
-인지 비교: [teamop-vs-team14.md](teamop-vs-team14.md) · 저속 체크리스트: [lowspeed-tuning.md](lowspeed-tuning.md)  
-**제어 숫자보다 먼저:** 초록 출발 게이트. 설계만 → [wait-green.md](wait-green.md). 코드는 아직 없음.
+기준: `2026` 트렁크(= race 병합본), 2026-08-19 재작성.
+소스: [`motion_planner_node.py`](../../src/decision_making_pkg/decision_making_pkg/motion_planner_node.py) · 인자: [launch-args.md](launch-args.md)
+인지 비교: [teamop-vs-team14.md](teamop-vs-team14.md) · 초록 출발: [wait-green.md](wait-green.md)
 
-`race`에는 검증된 주행 코드만 넣는다. 이 문서는 **아이디어와 실험 순서**다. 코드를 바꾸기 전에 같은 속도로 A/B부터 한다.
+주행 기본 가중치는 **`teamop_best.pt`** (자동 선택). `best_psh`는 차선만 A/B용, `best_psh_v2`는 차선이 없어 쓰지 않는다 — [`weights/README.md`](../../weights/README.md)
 
----
-
-## 0. 지금 역할 분담
-
-| 사람 | 하는 일 | 하지 않는 일 |
-|------|---------|--------------|
-| 팀원 | `best_psh` 신호등 추가학습 | 조향 로직을 동시에 크게 바꾸기 |
-| 우리 | `best_psh` / `teamop` 번갈아 제어 튜닝 | team14 재시험, Kingo 재학습 |
-
-간략 미션은 초록 출발 + CCW 2랩 + 랩2 정차다. 제어 튜닝 중에는 신호등·라이다 노드를 꺼 두고 **차로만** 본다.
+> 이 문서는 2026-08-13 판에서 **bang-bang 기준으로 쓰여 있었다.** race가 8/13~14에 조향 파이프라인을 통째로 갈아서, 그때의 P0/P1 노브 대부분이 이미 코드에 들어갔다. 아래는 **지금 도는 코드** 기준이다. 옛 계획 대비 무엇이 반영됐는지는 §5.
 
 ---
 
-## 1. 우리 제어기가 실제로 하는 일
-
-파이프라인:
+## 1. 지금 도는 파이프라인
 
 ```text
 lane2 마스크
-  → extractor  (가장자리 → BEV → ROI → 중심점 3개, y=5/55/105)
-  → path_planner (차 범퍼 (320,179) + CubicSpline 100점)
-  → motion_planner
-       path[-10] → path[-1] 기울기
-       기울기 > 0 → +steer_max
-       기울기 < 0 → −steer_max
-       아니면 0
-       속도는 좌우 동일 상수
+  → extractor  BEV 채운 차선면 → 중심 x 한 개 (moments ↔ row_mid 블렌드)
+               control_cutting_idx=160 위쪽 잘라냄 · control_min_area=1000 미만은 무효(nan)
+  → lane_control_info  (center_x, area, stamp)
+  → motion_planner  P 제어
   → serial  s{steer}l{L}r{R}\n
 ```
 
-| | `race` (실차 작업트리) | `2026` 문서/클론 |
-|--|------------------------|------------------|
-| 속도 | **70 고정** (`motion_planner_node.py`) | `drive_speed` 파라미터, 기본 60 |
-| 조향 | **±7 고정** | `steer_max` 파라미터, 기본 7 |
-| 디버그 | 로그 한 줄 | `/control_debug` String |
+**`path_planner_node`(CubicSpline)는 `main.launch.py`에서 더 이상 띄우지 않는다.** 조향은 스플라인 경로가 아니라 BEV 차선면 중심 하나로 계산한다. 노드 파일과 `PathPlanningResult.msg`는 남아 있지만 주행 경로에서 빠져 있다.
 
-ino `MAX_STEERING_STEP = 7`. 소프트웨어에서 8을 보내도 보드가 자른다.
+### 조향 계산 ([`_follow_lane_surface`](../../src/decision_making_pkg/decision_making_pkg/motion_planner_node.py))
 
-기울기 함수는 `arctan(Δx/Δy)` (도). `path[-10]`과 `path[-1]`은 스플라인에서 **차에 가까운 쪽**이다. lookahead가 짧아서 코너 반응은 빠르고, 마스크가 흔들리면 **±7이 매 주기(0.1s) 뒤집힌다.**
+```python
+error_px = center_x - vehicle_center_x          # 320.0
+raw      = clamp(steer_k * error_px, ±steer_max) # 0.044, ±7
+filtered = (1-α)*filtered + α*raw                # α = steer_alpha = 1.0 → 필터 통과
+delta    = clamp(filtered - limited, ±steer_rate) # 7.0
+limited  = clamp(limited + delta, ±steer_max)
+steering = int(round(limited))
+```
 
-경로가 없으면 조향 0, 속도는 **그대로**다. 마스크가 끊겨도 직진으로 들이받는다.
+| 상수 | 값 | 의미 |
+|---|---|---|
+| `steer_k` | `0.044` | 조향스텝/픽셀. 오차 160px에서 포화(0.044×160 ≈ 7) |
+| `vehicle_center_x` | `320.0` | BEV 목표 x. bag 평가 기준 |
+| `steer_max` | `7` | ino `MAX_STEERING_STEP`과 일치. 8을 보내도 보드가 자른다 |
+| `steer_alpha` | `1.0` | **EMA 꺼짐.** 낮추면 반응이 느려지고 부드러워진다 |
+| `steer_rate` | `7.0` | 한 틱(0.1s) 변화 상한. 조향 폭이 −7~+7(14칸)이라 전체 반전은 2틱 |
+
+### 속도 분기 ([`_follow_path`](../../src/decision_making_pkg/decision_making_pkg/motion_planner_node.py))
+
+| 상태 | 조건 | 조향 | 속도 |
+|---|---|---|---|
+| `ctrl=wait_lane` | 유효 center가 **한 번도** 안 옴 | 0 | **0** (정지) |
+| `ctrl=surface` | center 나이 ≤ `lane_timeout` 0.35s | P 제어 | `drive_speed` **250** |
+| `ctrl=lane_lost` | center가 0.35s 넘게 없음 | **0으로 리셋** | `lane_lost_speed` **30** |
+
+옛 문서의 "경로 없으면 조향 0 + 속도 유지 → 직진으로 들이받는다"는 **해결됐다.** 지금은 차선을 놓치면 30까지 떨어지고, 시작 전에는 아예 안 나간다.
+
+### 출발·정지
+
+| 항목 | 값 | 동작 |
+|---|---|---|
+| `require_green_start` | `true` | 초록 `need_green_hits`=3틱 연속 → 출발 |
+| `green_start_timeout` | `15.0` | 초록을 못 봐도 15초 뒤 자동 출발. `0`이면 무한 대기 |
+| `/force_start` | — | `std_msgs/Bool true` 발행하면 즉시 출발 |
+| `enable_finish_stop` | `true` | 2랩 정지 |
+| `lidar_stop_rmin/rmax` | `0.12` / `0.95` | `lidar_lane1_min`이 이 구간이면 정지 후보 |
+| `need_finish_hits` | `3` | 3틱 연속이어야 정지 확정 |
+
+정지는 **라이다 거리만** 본다. 신호등 박스가 보이는지는 조건이 아니다 (`_finish_source`).
 
 ---
 
-## 2. 먼저 인지와 제어를 분리한다
+## 2. 인지와 제어를 분리한다
 
-한 번에 가중치와 조향을 같이 바꾸지 않는다.
-
-고정할 것: 속도, 조향 한계, BEV, 카메라, threshold.  
-바꿀 것: `model:=` 만.
+한 번에 가중치와 조향을 같이 바꾸지 않는다. 고정할 것: 속도, 조향 상수, BEV, 카메라, threshold. 바꿀 것: `model:=` 만.
 
 ```bash
 W=~/ros2_ws/weights
 
 # 1) 주행 기본 (차선+신호등)
-ros2 launch launch_pkg main.launch.py \
-  model:=$W/teamop_best.pt device:=cuda:0
+ros2 launch launch_pkg main.launch.py
 
-# 2) 차선만 A/B (신호등 약함. race는 drive_speed 없을 수 있음 → 코드의 70)
-ros2 launch launch_pkg main.launch.py \
-  model:=$W/best_psh.pt device:=cuda:0
+# 2) 차선만 A/B (신호등 약함)
+ros2 launch launch_pkg main.launch.py model:=$W/best_psh.pt
 ```
 
-같은 코스(직선 → 첫 코너 → S자)를 두 번. 기록은 아래 시트.
+같은 코스(직선 → 첫 코너 → S자)를 두 번. 기록은 §6 시트.
 
 | 결과 | 의미 | 다음 |
-|------|------|------|
-| 둘 다 같은 곳에서 이탈 | **제어** (속도·bang-bang·경로 없음) | §3 노브 |
+|---|---|---|
+| 둘 다 같은 곳에서 이탈 | **제어** | §3 노브 |
 | psh만 통과, teamop만 이탈 | **마스크 품질** | 그 구간은 인지. 제어는 psh로 진행 |
-| 둘 다 직선은 OK, 코너만 흔들림 | 속도↓ 또는 조향 채터 | deadband / 코너 감속 |
-| 한쪽으로만 붙음 | BEV·`car_center` 편향 | 조향 수식보다 `bev_calibrator` |
+| 둘 다 직선 OK, 코너만 흔들림 | 게인 과대 또는 속도 | `steer_k`↓ 또는 `drive_speed`↓ |
+| 한쪽으로만 붙음 | BEV·목표 x 편향 | `vehicle_center_x` 재측정, `bev_calibrator` |
 
 team14는 이 A/B에 넣지 않는다 ([teamop-vs-team14.md](teamop-vs-team14.md)).
 
 ---
 
-## 3. 노브 순서 (효과 / 위험)
+## 3. 남은 노브 (효과 / 위험)
 
-아래는 **적용 후보**다. 한 번에 하나만. 속도 255, TeamOP arctan 통째, path_planner 삭제는 첫 주에 하지 않는다.
+전부 `ros2 param set`으로 **주행 중에 바로 먹는다.** 한 번에 하나만.
 
-### P0 — 오늘·내일, 코드 최소
+| 순위 | 노브 | 언제 | 시작값 | 위험 |
+|:---:|---|---|---|---|
+| 1 | `drive_speed`↓ | 코너 이탈·전반적 불안정 | 250 → 180 → 120 | 느리면 랩타임 손해 |
+| 2 | `steer_k`↓ | 직선에서 좌우로 흔들림(과대 게인) | 0.044 → 0.035 | 코너 진입이 늦어짐 |
+| 3 | `steer_alpha`↓ | 채터가 남을 때 EMA를 켠다 | 1.0 → 0.6 → 0.4 | 반응 지연. 코너에서 밖으로 |
+| 4 | `steer_rate`↓ | 한 틱 급변을 막는다 | 7.0 → 3.0 → 2.0 | 코너가 무뎌짐 |
+| 5 | `vehicle_center_x` | 한쪽으로 일정하게 붙음 | 320 ± 실측 오프셋 | 남의 숫자 복붙 금지 |
+| 6 | `near_blend` | 중심이 멀리를 너무 봄/가까이만 봄 | 1.0 → 0.75 → 0 | 0이면 예전 모멘트만 |
+| 7 | `control_cutting_idx` | BEV 위쪽 노이즈 | 160 → 200 (더 자름) | 너무 자르면 lookahead 소멸 |
+| 8 | `lane_lost_speed` | 마스크가 자주 끊김 | 30 → 0 (완전 정지) | 잠깐 끊길 때마다 멈춤 |
 
-| 순위 | 노브 | 왜 | 시작값 | 위험 |
-|:---:|------|----|--------|------|
-| 1 | **속도↓** | bang-bang ±7은 느릴수록 산다. 코너 이탈의 1순위 | race 70 → **50** (필요하면 40) | 스톨. 5초 정지 페널티 |
-| 2 | **기울기 deadband** | 직선에서 기울기 부호가 뒤집히면 ±7 진동 | `abs(slope) < 3~5°` → steer 0 | 너무 크면 코너 진입이 늦음 |
-| 3 | **경로 없음 = 감속** | 지금: 조향 0 + 속도 유지 → 직진 이탈 | 속도 20–30 또는 0, 마지막 조향 유지 | 마스크가 자주 끊기면 스톨 |
-| 4 | **steer_max 7 → 5/6** | 1TAEKIM `+5 / −6`. CCW라 좌(−)를 한 칸 더 | 진동 심할 때만 | 첫 코너가 안 돌면 다시 7 |
+```bash
+ros2 param set /motion_planner_node steer_k 0.035
+ros2 param set /motion_planner_node steer_alpha 0.6
+ros2 param set /lane_info_extractor_node near_blend 0.75
+```
 
-`2026` 클론에는 이미 `drive_speed` / `steer_max` 파라미터가 있다. race에 없으면 **그 두 줄만** 이식하는 편이 arctan 이식보다 안전하다.
+`model`과 `src_*`(IPM)는 재런치가 필요하다 — [launch-args.md](launch-args.md) §4.
 
-### P1 — 저속 1바퀴가 된 뒤
+### 일부러 안 하는 것
 
-| 순위 | 노브 | 왜 | 가져올 곳 | 위험 |
-|:---:|------|----|-----------|------|
-| 5 | **직선/코너 속도 분기** | `abs(steer)≤1`이면 직선 속도, 아니면 10–20 낮춤 | youngsangc 180/165 아이디어만. 숫자는 50/40부터 | 분기 임계가 채터면 속도도 채터 |
-| 6 | **BEV / car_center** | 마스크는 있는데 차가 한쪽으로 붙음 | `bev_calibrator`, `cutting_idx`, path의 `(320,179)` | 남의 `src_mat` 복붙 금지 |
-| 7 | **비대칭 조향** | 12일 캡처에 음수 조향이 많음 = 좌코너가 김 | 1TAEKIM −6 / +5 | 우S에서 부족하면 대칭으로 되돌림 |
-| 8 | **조향 slew** | 한 주기에 7→−7 금지. ±1~2만 허용 | TeamOP `kd` 아이디어를 정수 클램프으로 | 코너가 무뎌짐 |
-
-### P2 — 일부러 미룸
-
-| 아이디어 | 출처 | 지금 안 하는 이유 |
-|----------|------|-------------------|
-| `steer = atan(kp * slope)` | TeamOP | 게인 두 개 + 미분. bang-bang이 산 다음에 |
-| `steer = int(slope * 0.1)` | youngsangc | 스케일이 우리 ROI와 다를 수 있음. 숫자 그대로 금지 |
-| path_planner 제거, lane 중심만 | 1TAEKIM / TeamOP | Course는 스플라인 경로가 공식 경로. 바꾸면 디버그 포인트가 사라짐 |
-| 속도 160–255 | 여러 팀 | 인지가 한 프레임만 깨져도 이탈. 저속 완주 전 금지 |
-| 시뮬 순수추종·곡률 앞먹임 | Simulation | 감각만. 실차 이식은 1바퀴 이후 |
+| 아이디어 | 안 하는 이유 |
+|---|---|
+| `path_planner` 되살려 스플라인 조향 | bag 스윕에서 차선면 중심이 이겼다. 되돌릴 근거가 없다 |
+| 미분항(D) 추가 | `steer_alpha`/`steer_rate`로 이미 감쇠가 있다. 게인 3개는 실차에서 못 잡는다 |
+| 좌우 비대칭 조향 | 지금 대칭으로 2랩이 돈다. 대칭이 안 될 때만 |
+| 남의 팀 숫자 복붙 | [external-references.md](external-references.md) 금지 목록 |
 
 ---
 
 ## 4. 증상 → 어디를 만지나
 
 | 증상 | 인지? 제어? | 먼저 |
-|------|-------------|------|
+|---|---|---|
 | 정지 상태에서도 lane2 없음 | 인지 | 가중치 스왑, `threshold` 0.4, 카메라 `match_train` |
-| 마스크는 있는데 타겟점 없음 | extractor / BEV | `bev_calibrator`, `cutting_idx` |
-| 직선에서 좌우로 흔들림 | 제어 채터 | deadband, 속도↓, slew |
-| 첫 코너에서 늦게 돌거나 밖으로 | 둘 다 가능 | A/B 가중치 → 그래도 같으면 속도↓, steer_max 유지 |
-| S자에서 한 쪽만 깎음 | 마스크 끊김 또는 과대 | psh vs teamop. 과대면 1taekim형(번짐)과 같은 병 |
-| 갑자기 직진으로 코스 아웃 | **경로 없음 + 속도 유지** | P0-3 |
+| 마스크는 있는데 중심이 nan | extractor | `control_min_area`↓, `control_cutting_idx`↓ |
+| 직선에서 좌우로 흔들림 | 제어 과대 | `steer_k`↓ → `steer_alpha`↓ → `steer_rate`↓ |
+| 첫 코너에서 늦게 돌거나 밖으로 | 둘 다 가능 | A/B 가중치 → 같으면 `drive_speed`↓ |
+| S자에서 한 쪽만 깎음 | 마스크 끊김 또는 과대 | psh vs teamop |
+| 갑자기 속도 30으로 기어감 | `lane_lost` | 로그에서 `ctrl=lane_lost` 확인 → 인지 문제 |
+| 출발을 안 함 | `wait_green` 또는 `wait_lane` | 로그 확인. `/force_start` 또는 `require_green_start:=false` |
+| 2랩 전에 멈춤 | 라이다 오검출 | `front_min` 로그. `lidar_stop_rmax`↓ |
 | 명령은 나오는데 안 돎 | 하드웨어 | 가변저항 엔드스톱, 시리얼, 모니터 OFF |
-| 한쪽으로만 붙고 안 돌아옴 | 편향 | `car_center` x (320). 1TAEKIM은 376 — **우리 값으로 다시 잴 것** |
 
 인지로 메울 것과 제어로 메울 것:
 
-- 마스크가 **아예 없음** → 학습 (팀원 psh / 실패 프레임). 조향 게인으로 안 메워진다.
-- 마스크는 있는데 **중심이 한쪽으로 0.5차선** → BEV·car_center. 조향 최댓값을 키우면 진동만 커진다.
-- 마스크·중심은 맞는데 **코너에서 못 따라감** → 속도·deadband·slew.
+- 마스크가 **아예 없음** → 학습. 게인으로 안 메워진다.
+- 마스크는 있는데 **중심이 한쪽으로 0.5차선** → BEV·`vehicle_center_x`. `steer_k`를 키우면 진동만 커진다.
+- 마스크·중심은 맞는데 **코너에서 못 따라감** → `drive_speed`·`steer_rate`.
 
----
+### 로그 읽기
 
-## 5. 다른 팀에서 가져올 숫자 (복붙 금지)
+`motion_planner_node`가 매 틱 한 줄을 찍는다. 별도 디버그 토픽은 없다 (`control_debug`는 이 로그 문자열의 일부다).
 
-상세 금지 목록: [external-references.md](external-references.md).
-
-| 팀 | 쓸 아이디어 | 쓰지 말 숫자 |
-|----|-------------|--------------|
-| 1TAEKIM | bang-bang 유지, ±5/6, 범퍼 좌표를 **실측** | speed 160, `car_center=(376,179)` 그대로, LiDAR consec=1 |
-| youngsangc | 직선/코너 속도 두 단 | 180/165, `y_max<200` |
-| TeamOP | 조향이 한 주기 점프하지 않게 | speed 255, `B_max=8`, kp/kd 그대로 |
-| cms1575 | (미션) 초록 전 속도 0 | 차선 제어에 가져오지 않음 |
-
-우리 트랙은 CCW. 첫 코너가 좌라면 `steer_max`를 좌우 같게 두고, 좌가 부족할 때만 −쪽만 키운다.
-
----
-
-## 6. race에 손댈 때
-
-- 속도·조향 한계만 파라미터화하는 것은 제어 튜닝에 바로 이득이다 (`2026` motion_planner 참고).
-- arctan / path 제거 / 미션 FSM은 `race`에 검증 없이 넣지 않는다.
-- 가중치 파일만 바꾸는 것은 이미 `model:=`로 된다. 기본값은 `teamop_best.pt`. `best_psh`는 차선 A/B용으로만.
-
-디버그 (모터 OFF 가능):
-
-```bash
-ros2 topic echo /topic_control_signal
-ros2 topic echo /yolov8_lane_info --once
-# 2026 노드를 썼다면
-ros2 topic echo /control_debug
+```
+steering: -3, left_speed: 250, right_speed: 250 hits=0/3 src=none tl=0 front_min=1.842
+  ctrl=surface center=251.7 area=18422 err=-68.3 raw=-3.01 ema=-3.01 limited=-3.01
 ```
 
-`steering`이 0.1초마다 +7/−7을 오가면 deadband가 먼저다. 코너 진입 전에 한참 0이면 lookahead나 deadband가 너무 큰 것이다.
+| 필드 | 보는 법 |
+|---|---|
+| `ctrl=` | `surface` 정상 · `lane_lost` 차선 놓침 · `wait_lane` 아직 출발 전 |
+| `err` | 중심 오차(px). 부호가 0.1초마다 뒤집히면 게인/속도 과대 |
+| `raw` → `ema` → `limited` | 세 값이 크게 벌어지면 필터·슬루가 걸리는 중 |
+| `front_min` | 라이다 전방 최소거리. 0.12~0.95면 정지 후보 |
+| `hits=n/3` | 정지 판정 연속 히트 |
+
+```bash
+ros2 topic echo /topic_control_signal      # 최종 명령
+ros2 topic echo /lane_control_info --once  # 중심 x
+ros2 topic echo /finish_stop_reason        # 왜 멈췄나
+```
 
 ---
 
-## 7. 실험 시트 (복사용)
+## 5. 8/13 계획 대비 무엇이 들어갔나
+
+| 옛 노브 | 지금 | 형태 |
+|---|---|---|
+| P0-1 속도↓ | ✅ 파라미터화 | `drive_speed` (다만 기본이 **250**으로 올라갔다) |
+| P0-2 기울기 deadband | ➖ 불필요 | slope 자체를 안 쓴다. 대신 `steer_k` 비례라 작은 오차엔 작은 조향 |
+| P0-3 경로 없음 = 감속 | ✅ 구현 | `lane_timeout` 0.35s → `lane_lost_speed` 30 |
+| P0-4 `steer_max` 5/6 | ➖ 미적용 | 7 유지. 비례 제어라 포화가 드물다 |
+| P1-5 직선/코너 속도 분기 | ❌ 미구현 | 단일 `drive_speed`. TEAMMODE 브랜치 아이디어 → [archive](archive/README.md) |
+| P1-6 BEV / car_center | ✅ 파라미터화 | `vehicle_center_x`, `control_cutting_idx`, `bev_calibrate.launch.py` |
+| P1-7 비대칭 조향 | ❌ 미구현 | 대칭 유지 |
+| P1-8 조향 slew | ✅ 구현 | `steer_rate` (기본값은 사실상 꺼짐) |
+| P2 `atan(kp·slope)` | ➖ 다른 방식 | 픽셀 오차 선형 P로 갔다 |
+| P2 속도 160–255 | ✅ 채택 | 저속 완주 후 250까지 올림 |
+
+미구현 2개(직선/코너 분기, 비대칭)는 팀원 `TEAMMODE` 브랜치에 시제품이 있다. 실차 미검증이라 트렁크에는 안 넣었고 패치로만 보관한다 — [archive/README.md](archive/README.md).
+
+---
+
+## 6. 실험 시트 (복사용)
 
 한 주행에 한 줄. 가중치와 제어 노브를 **둘 다** 적는다.
 
-| 시각 | 가중치 | 속도 | steer_max | deadband | 직선 | 첫 코너 | S자 | 이탈 위치 | 비고 |
-|------|--------|------|-----------|----------|------|---------|-----|-----------|------|
-| | best_psh | 70 | 7 | 없음 | | | | | race 기본 |
-| | teamop | 70 | 7 | 없음 | | | | | 동일 제어 |
-| | best_psh | 50 | 7 | 없음 | | | | | 속도만 |
-| | best_psh | 50 | 7 | 4° | | | | | |
+| 시각 | 가중치 | drive_speed | steer_k | alpha | rate | 직선 | 첫 코너 | S자 | 이탈 위치 | 비고 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| | teamop | 250 | 0.044 | 1.0 | 7.0 | | | | | 현재 기본 |
+| | teamop | 180 | 0.044 | 1.0 | 7.0 | | | | | 속도만 |
+| | teamop | 250 | 0.035 | 1.0 | 7.0 | | | | | 게인만 |
+| | best_psh | 250 | 0.044 | 1.0 | 7.0 | | | | | 인지 A/B |
 
-통과(저속): 직선에서 실선·점선을 연속으로 넘지 않음 · 코너 스톨 없음 · 구조물 비접촉.
+통과 기준: 직선에서 실선·점선을 연속으로 넘지 않음 · 코너 스톨 없음 · 구조물 비접촉 · 2랩 후 정차.
 
-끝난 뒤: 팀원 TL 가중치가 오면 **같은 제어 숫자**로만 모델을 갈아 끼운다. 제어와 TL을 같은 주행에서 같이 바꾸지 않는다.
+끝난 뒤: 가중치가 바뀌면 **같은 제어 숫자**로만 모델을 갈아 끼운다. 제어와 인지를 같은 주행에서 같이 바꾸지 않는다.

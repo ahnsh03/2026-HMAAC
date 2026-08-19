@@ -30,15 +30,15 @@ W=$HOME/ros2_ws/weights
 ros2 launch launch_pkg camera_only.launch.py cam_num:=0
 ./scripts/c920_setup.sh match_train /dev/video0
 ros2 launch launch_pkg perception_debug.launch.py \
-  model:=$W/teamop_best.pt device:=cuda:0 cam_num:=0
+  model:=$W/teamop_best.pt cam_num:=0
 # 차선만 A/B: model:=$W/best_psh.pt
 # 파이프라인만: model:=$W/team14_best.pt
 # best_psh_v2 = Traffic 전용, 차선 없음, 주행 금지
 ros2 run debug_pkg bev_calibrator_node
 ./scripts/run_session.sh
-# 폐루프 (race는 drive_speed 없을 수 있음)
+# 폐루프 (기본 drive_speed=250. 처음엔 낮춰서)
 ros2 launch launch_pkg main.launch.py \
-  model:=$W/teamop_best.pt device:=cuda:0
+  model:=$W/teamop_best.pt
 # 차선만 A/B: model:=$W/best_psh.pt
 python3 src/data_collection/data_collection.py
 ```

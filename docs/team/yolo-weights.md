@@ -3,7 +3,7 @@
 목적: 실차에 차선(`lane2`)·신호등(`traffic_light`)이 잡히게 한다.  
 시뮬 `sim.pt`는 쓰지 않는다.
 
-관련: [teamop-vs-team14.md](teamop-vs-team14.md) · [tl-hsv-tuning.md](tl-hsv-tuning.md) · [controller-tuning.md](controller-tuning.md) · [external-references.md](external-references.md) · [weights/README.md](../../src/camera_perception_pkg/camera_perception_pkg/weights/README.md) · [repo-structure-and-realcar-guide.md](repo-structure-and-realcar-guide.md) · [lowspeed-tuning.md](lowspeed-tuning.md)
+관련: [teamop-vs-team14.md](teamop-vs-team14.md) · [tl-hsv-tuning.md](tl-hsv-tuning.md) · [controller-tuning.md](controller-tuning.md) · [external-references.md](external-references.md) · [weights/README.md](../../weights/README.md) · [repo-structure-and-realcar-guide.md](repo-structure-and-realcar-guide.md) · [lowspeed-tuning.md](lowspeed-tuning.md)
 
 ---
 
@@ -154,7 +154,7 @@ extractor는 **클래스 이름 문자열**(`lane2`, `traffic_light`)로 필터�
 
 ```text
 # Course / 이 문서 트리
-src/camera_perception_pkg/camera_perception_pkg/weights/
+weights/
 
 # 실차 race 워크스페이스
 ~/ros2_ws/weights/          # best_psh.pt · best_psh_v2.pt
@@ -185,10 +185,10 @@ src/camera_perception_pkg/camera_perception_pkg/weights/
 시간 없으면 **`teamop`만**. 차선만 더 보고 싶으면 `best_psh`를 켠다. `best_psh_v2`는 `model:=`에 넣지 말 것.
 
 ```bash
-W=$HOME/ros2_ws/weights   # race. Course 트리는 camera_perception_pkg/.../weights
+W=$HOME/ros2_ws/weights
 
 ros2 launch launch_pkg main.launch.py \
-  model:=$W/teamop_best.pt device:=cuda:0
+  model:=$W/teamop_best.pt
 
 # 차선만 A/B
 # model:=$W/best_psh.pt
@@ -325,8 +325,8 @@ python3 src/data_collection/data_collection.py
 실주행은 항상 `model:=…/weights/….pt`로 덮어쓴다. race `main.launch.py`에는 `drive_speed`가 없을 수 있다.
 
 ```bash
-ros2 launch launch_pkg main.launch.py model:=$W/teamop_best.pt device:=cuda:0
-ros2 launch launch_pkg main.launch.py model:=$W/best_psh.pt device:=cuda:0
+ros2 launch launch_pkg main.launch.py model:=$W/teamop_best.pt
+ros2 launch launch_pkg main.launch.py model:=$W/best_psh.pt
 ```
 
 명령 모음: [common-commands.md §6](../common-commands.md)

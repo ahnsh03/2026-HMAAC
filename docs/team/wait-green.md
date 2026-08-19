@@ -1,6 +1,6 @@
 # 초록 출발 (WAIT_GREEN)
 
-상태: **`race`에 구현됨** (`bc60881` + 구간 테스트 `/force_start`).  
+상태: **`2026` 트렁크에 구현됨** (`bc60881` + `/force_start` + 15초 타임아웃 `8c09832`).  
 전제: 간략 미션은 출발선에서 적 → 첫 녹만 보고 출발. 랩 중 신호등으로 랩을 세지 않음.  
 관련: [controller-tuning.md](controller-tuning.md) · [tl-hsv-tuning.md](tl-hsv-tuning.md) · [mission-strategy.md](../06-final-eval/mission-strategy.md) · [verbal-briefing.md](../06-final-eval/verbal-briefing.md)
 
@@ -11,8 +11,10 @@
 
 ## 0. 왜 제어 튜닝보다 먼저인가
 
-지금 `race` `motion_planner`는 **출발 전** 속도 0이다. `Green`이 0.3초 연속이거나 `/force_start`가 true면 속도 70으로 경로 추종한다.  
-`traffic_light_detector_node`는 `main.launch.py`에서 켜져 있다 (`enable_traffic_light:=true`).
+`motion_planner`는 **출발 전** 속도 0이다. `Green`이 0.3초 연속(`need_green_hits`=3틱)이거나 `/force_start`가 true면 `drive_speed`(기본 **250**)로 차선을 따라간다.
+`traffic_light_detector_node`는 `main.launch.py`에서 **항상 켜진다.** 끄는 인자는 없다.
+
+**자동 출발 타임아웃:** 초록을 못 보면 `green_start_timeout`(기본 **15.0초**) 뒤에 스스로 출발한다. 무한 대기시키려면 `green_start_timeout:=0`.
 
 출발 게이트를 먼저 잠그면 이후 속도·deadband 실험이 “이미 출발한 차”만 본다.
 
@@ -162,20 +164,18 @@ ros2 param set /motion_planner_node require_green_start false
 
 ```bash
 ros2 launch launch_pkg main.launch.py \
-  model:=$W/teamop_best.pt device:=cuda:0 \
+  model:=$W/teamop_best.pt \
   require_green_start:=false
 ```
 
-켜자마자 속도 70. 코너만 볼 때.
+켜자마자 `drive_speed`로 달린다. 코너만 볼 때는 `drive_speed:=50`을 같이 준다.
 
 ### C. 초록 토픽을 직접 쏘기
 
-detector와 싸우지 않게 detector를 끈다. `Green`이 **0.3초 연속**(3틱)이어야 하므로 한 번이 아니라 주기 publish:
+detector를 끄는 launch 인자는 **없다.** detector가 `Red`를 계속 쏘면 이 방법은 안 먹으니, 신호등이 안 보이는 자리에서 하거나 B(`require_green_start:=false`)를 쓴다. `Green`이 **0.3초 연속**(3틱)이어야 하므로 한 번이 아니라 주기 publish:
 
 ```bash
-ros2 launch launch_pkg main.launch.py \
-  model:=$W/teamop_best.pt device:=cuda:0 \
-  enable_traffic_light:=false
+ros2 launch launch_pkg main.launch.py
 
 # 다른 터미널. -r 10 → 0.3s면 충분
 ros2 topic pub -r 10 /yolov8_traffic_light_info std_msgs/msg/String "{data: 'Green'}"
@@ -187,7 +187,7 @@ Ctrl+C로 pub을 멈춰도 이미 출발했으면 계속 달린다.
 
 ## 7. 구현 체크
 
-- [x] `main.launch.py` detector 주석 해제 (`enable_traffic_light`로 끌 수 있음)
+- [x] `main.launch.py` detector 상시 ON (끄는 launch 인자는 없다)
 - [x] `motion_planner`에 `started` / `green_hits` / 조기 return
 - [x] started 이후 기존 적색 `y_max` 분기는 타지 않음
 - [x] `/force_start`, `require_green_start` 런타임 변경

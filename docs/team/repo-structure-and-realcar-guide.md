@@ -146,7 +146,7 @@ ros2 topic echo /topic_control_signal
 
 ### Step B — 데이터 → YOLO ([yolo-weights](yolo-weights.md))
 
-**기본:** Course [`weights/`](../../src/camera_perception_pkg/camera_perception_pkg/weights/)의 **`teamop_best.pt`**. `best_psh.pt`는 차선만 A/B(신호등 약함). `best_psh_v2`는 차선 없음. `team14_best.pt`는 파이프라인 확인만. 순서: [yolo-weights §3](yolo-weights.md).  
+**기본:** 루트 [`weights/`](../../weights/)의 **`teamop_best.pt`**. `best_psh.pt`는 차선만 A/B(신호등 약함). `best_psh_v2`는 차선 없음. `team14_best.pt`는 파이프라인 확인만. 순서: [yolo-weights §3](yolo-weights.md).  
 참고 레포 URL·clone: [external-references](external-references.md).  
 안 되면 Colab+Roboflow [`notebooks/kingo_car.ipynb`](notebooks/kingo_car.ipynb).  
 정지 상태에서 마스크가 붙는지 먼저 확인.
@@ -157,7 +157,7 @@ ros2 topic echo /topic_control_signal
 상세 명령: [debug-and-incremental-test.md](debug-and-incremental-test.md)
 
 `main.launch.py`에서 `serial_sender`**는 실차 주행용으로 활성화**되어 있다 (`data_source` 기본=`camera`).  
-신호등·라이다는 미션 단계에서 주석 해제. 시각화는 `debug_overlay.launch.py`.
+신호등·라이다 노드는 `main.launch.py`에서 **항상 켜진다.** 시각화는 `debug:=true`(기본)의 `race_viz` 한 창.
 
 시리얼 모니터(Arduino IDE)와 ROS `serial_sender`를 **동시에** 열지 말 것.
 
@@ -186,7 +186,7 @@ cd ~/ros2_ws
 colcon build --symlink-install
 ros2 launch launch_pkg main.launch.py
 # 가중치 교체 예:
-# ros2 launch launch_pkg main.launch.py model:=best.pt device:=cuda:0
+# ros2 launch launch_pkg main.launch.py model:=best.pt
 
 # 데이터 수집
 python3 src/data_collection/data_collection.py

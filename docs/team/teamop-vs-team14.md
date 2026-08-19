@@ -145,7 +145,7 @@ teamop이 “완벽”은 아니다. 첫 코너·S자는 세 모델 공통 약�
 
 ## 6. 실차 스왑 명령
 
-race 작업트리 기준 가중치는 레포 루트 `weights/`.
+가중치는 레포 루트 `weights/`.
 
 ```bash
 W=~/ros2_ws/weights   # 또는 레포 루트 weights/

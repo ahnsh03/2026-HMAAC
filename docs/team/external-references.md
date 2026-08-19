@@ -4,7 +4,7 @@
 이 문서는 `external/` 클론을 **하나씩 열어** 2026 H-모빌리티(화학관 라운지)에 **실제로 쓸 점 / 복사하면 안 되는 점**을 정리한 것이다.
 
 가중치 드롭인·테스트 순서: [yolo-weights.md](yolo-weights.md)  
-이미 복사된 `.pt`: [`weights/`](../../src/camera_perception_pkg/camera_perception_pkg/weights/)  
+이미 복사된 `.pt`: [`weights/`](../../weights/)  
 소단위 검증: [debug-and-incremental-test.md](debug-and-incremental-test.md)
 
 **우리 스택 (바꾸지 말 것):** `lane2` + `traffic_light` YOLO-seg → HSV 색 → bang-bang `motion_planner` → Arduino `s{steer}l{left}r{right}\n` **115200**.  
@@ -252,6 +252,6 @@ stock IPM = `[[238,316],[402,313],[501,476],[155,476]]`. 우리 카메라각이 
 1. Course `weights/` S급 드롭인 + `perception_debug` ([yolo-weights.md](yolo-weights.md))
 2. 1TAEKIM 조향/속도 숫자로 저속 1바퀴
 3. cms1575 아이디어로 Green 게이트 · (필요 시) 정지 퓨전
-4. PCC serial 안정화 · LiDAR 0–30° 시각화 (`lidar_debug.launch.py`)
+4. PCC serial 안정화 · LiDAR 0–30° 확인 (`sensor_bag.launch.py lidar:=true`)
 5. F23 runbook/신호등 latch는 **읽고** 프로토콜·가중치는 무시
 6. 깨지면 Kingo FT: `notebooks/kingo_car.ipynb` — 같은 데이터 재학습은 이득 작음

@@ -61,6 +61,7 @@ docs/
 - [내일 실차 재개 체크리스트](team/tomorrow-prep.md)
 - [HW 부팅 (장치·시리얼·SMPS)](team/hw-boot.md)
 - [YOLO 가중치 적용](team/yolo-weights.md)
+- [가중치 폴더 · 자동 선택 순서](../weights/README.md)
 - [teamop vs team14 실차 분석](team/teamop-vs-team14.md)
 - [제어기 튜닝 아이디어](team/controller-tuning.md)
 - [폐기 브랜치 백업 (newmp · TEAMMODE)](team/archive/README.md)

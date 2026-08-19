@@ -37,7 +37,7 @@ git pull
 git log -1 --oneline
 
 # 가중치 (Course weights/ · ~237MB)
-W=src/camera_perception_pkg/camera_perception_pkg/weights
+W=weights
 ls -lh $W/*.pt
 # 있어야 할 파일 10개:
 #   teamop_best.pt          # 주행 기본 · 차선+신호등
