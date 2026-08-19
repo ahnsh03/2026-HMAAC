@@ -1,0 +1,37 @@
+# 이 레포 전용. 레포 루트(..)를 /root/hmobility_ws 로 마운트한다.
+#   cd docker && xhost +local:docker && docker compose up -d
+
+services:
+  hmobility-offline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hmobility-offline:humble
+    container_name: hmobility-offline
+    network_mode: host
+    # install.sh 가 cu128 torch 로 GPU 추론을 전제하므로 GPU 를 붙인다.
+    # GPU 가 없는 호스트에서는 이 두 줄을 지우고 CPU torch 로 빌드할 것
+    # (Dockerfile 의 TORCH_INDEX 주석 참고).
+    gpus: all
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      # 시뮬 레포 컨테이너와 host network 를 공유할 때 토픽 충돌 방지 (시뮬=0)
+      - ROS_DOMAIN_ID=${OFFLINE_ROS_DOMAIN_ID:-1}
+      - NVIDIA_VISIBLE_DEVICES=all
+      # 추론(compute)만 GPU 로. 렌더링은 WSLg/호스트 GL 에 맡긴다.
+      - NVIDIA_DRIVER_CAPABILITIES=utility,compute
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /etc/localtime:/etc/localtime:ro
+      - ..:/root/hmobility_ws:rw
+      # 아두이노 / RPLidar 시리얼이 필요하면 주석 해제.
+      # WSL 에서는 Windows 쪽 USB 패스스루(usbipd)가 추가로 필요하다.
+      # - /dev:/dev
+    # 특정 포트만 넘기려면 위의 /dev:/dev 대신 아래처럼 쓴다.
+    # devices:
+    #   - /dev/ttyUSB0:/dev/ttyUSB0
+    shm_size: "2gb"
+    stdin_open: true
+    tty: true
+    command: ["tail", "-f", "/dev/null"]
