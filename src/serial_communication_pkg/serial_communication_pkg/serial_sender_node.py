@@ -8,6 +8,7 @@ from rclpy.qos import QoSDurabilityPolicy
 from rclpy.qos import QoSReliabilityPolicy
 from interfaces_pkg.msg import MotionCommand
 from .lib import protocol_convert_func_lib as PCFL
+from .node_shutdown import install_shutdown
 
 #---------------Variable Setting---------------
 # Subscribe할 토픽 이름
@@ -44,26 +45,25 @@ class SerialSenderNode(Node):
     ser.write(serial_msg.encode())
 
 def main(args=None):
+  install_shutdown()
   rclpy.init(args=args)
   node = SerialSenderNode()
   try:
       rclpy.spin(node)
-      
-  except KeyboardInterrupt:
+  except (KeyboardInterrupt, SystemExit):
       print("\n\nshutdown\n\n")
-      steering = 0
-      left_speed = 0
-      right_speed = 0
-      message = PCFL.convert_serial_message(steering, left_speed, right_speed)
-      ser.write(message.encode())
-      pass
-    
   finally:
-    ser.close()
+    try:
+      message = PCFL.convert_serial_message(0, 0, 0)
+      if ser.is_open:
+        ser.write(message.encode())
+        ser.close()
+    except Exception:
+      pass
     print('closed')
-    
-  node.destroy_node()
-  rclpy.shutdown()
+    node.destroy_node()
+    if rclpy.ok():
+      rclpy.shutdown()
   
 if __name__ == '__main__':
   main()

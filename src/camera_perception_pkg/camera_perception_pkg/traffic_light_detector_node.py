@@ -17,6 +17,7 @@ from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from interfaces_pkg.msg import DetectionArray, BoundingBox2D, Detection
 from std_msgs.msg import String
+from .node_shutdown import close_cv_windows, install_shutdown
 
 from .lib import camera_perception_func_lib as CPFL
 
@@ -89,16 +90,18 @@ class TrafficLightDetector(Node):
 
 
 def main(args=None):
+    install_shutdown(close_cv=True)
     rclpy.init(args=args)
     node = TrafficLightDetector()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, SystemExit):
         print("\n\nshutdown\n\n")
     finally:
+        close_cv_windows()
         node.destroy_node()
-        cv2.destroyAllWindows()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

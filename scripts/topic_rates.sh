@@ -8,11 +8,10 @@ WINDOW="${WINDOW:-6}"
 TOPICS=(
   /image_raw
   /detections
-  /yolov8_lane_info
-  /roi_image
-  /path_planning_result
+  /lane_control_info
   /topic_control_signal
   /yolov8_traffic_light_info
+  /yolov8_visualized_img
   /lidar_raw
   /lidar_processed
   /lidar_obstacle_info

@@ -136,7 +136,14 @@ def install_rootless_keyboard(key_until):
 
 
 def main():
-    DATA_PATH = os.path.dirname(real_path) + '/camera_perception_pkg/camera_perception_pkg/lib/Collected_Datasets'
+    DATA_PATH = os.path.normpath(os.path.join(
+        real_path,
+        '..',
+        'camera_perception_pkg',
+        'camera_perception_pkg',
+        'lib',
+        'Collected_Datasets',
+    ))
     CAMERA_NUM = 2
     SERIAL_PORT = '/dev/ttyACM0'
     MAX_STEERING = 7

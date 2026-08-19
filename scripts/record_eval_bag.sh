@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# 실차 평가 bag. 없는 토픽은 ros2 bag record 가 경고만 하고 넘어가도록
-# 존재하는 것만 고른다.
+# main 세션 bag. 카메라·라이다·제어를 항상 기록한다.
 #
+#   source /opt/ros/humble/setup.bash && source install/setup.bash
 #   ./scripts/record_eval_bag.sh ~/hmaac_logs/TS/bag
+#
+#   SKIP_VISUALIZED=1  — 오버레이 영상만 빼고 용량 줄이기
 set -euo pipefail
 
 DEST="${1:-}"
@@ -13,38 +15,43 @@ fi
 
 mkdir -p "$DEST"
 
-CANDIDATES=(
+TOPICS=(
   /image_raw
-  /detections
-  /yolov8_lane_info
-  /yolov8_traffic_light_info
-  /roi_image
-  /path_planning_result
-  /topic_control_signal
-  /control_debug
-  /debug_markers
-  /yolov8_visualized_img
-  /path_visualized_img
-  /control_hud_img
   /lidar_raw
   /lidar_processed
   /lidar_obstacle_info
-  /lidar_visualized_img
+  /lidar_lane1_min
+  /detections
+  /yolov8_traffic_light_info
+  /lane_control_info
+  /topic_control_signal
+  /finish_stop_reason
 )
 
-TOPICS=()
-for t in "${CANDIDATES[@]}"; do
-  if ros2 topic list 2>/dev/null | grep -qx "$t"; then
-    TOPICS+=("$t")
-  fi
-done
+if [[ "${SKIP_VISUALIZED:-0}" != "1" ]]; then
+  TOPICS+=(
+    /yolov8_visualized_img
+    /lane2_control_bev
+    /race_viz
+  )
+fi
 
-if [[ ${#TOPICS[@]} -eq 0 ]]; then
-  echo "기록할 토픽이 없음. ROS_DOMAIN / source 확인." >&2
-  ros2 topic list || true
+TOPIC_LIST="$(ros2 topic list 2>/dev/null || true)"
+if [[ -z "$TOPIC_LIST" ]]; then
+  echo "ros2 topic list 실패. ROS_DOMAIN / source 확인." >&2
   exit 1
 fi
 
-echo "recording ${#TOPICS[@]} topics -> $DEST"
+if ! grep -qx '/image_raw' <<<"$TOPIC_LIST"; then
+  echo "ERROR: /image_raw 가 없다. main.launch 가 떠 있는지 확인." >&2
+  exit 1
+fi
+
+if ! grep -qx '/lidar_raw' <<<"$TOPIC_LIST"; then
+  echo "WARN: /lidar_raw 가 아직 없다. /dev/ttyUSB0 권한을 확인. 토픽이 뜨면 이어서 기록한다." >&2
+fi
+
+printf '%s\n' "${TOPICS[@]}" > "$DEST/topics.txt"
+echo "recording ${#TOPICS[@]} topics -> $DEST/eval"
 printf '  %s\n' "${TOPICS[@]}"
 exec ros2 bag record -o "$DEST/eval" "${TOPICS[@]}"

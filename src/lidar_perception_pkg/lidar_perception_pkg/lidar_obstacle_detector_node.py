@@ -1,7 +1,9 @@
+import math
+
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Float32
 
 from rclpy.qos import QoSProfile
 from rclpy.qos import QoSHistoryPolicy
@@ -9,14 +11,36 @@ from rclpy.qos import QoSDurabilityPolicy
 from rclpy.qos import QoSReliabilityPolicy
 
 from .lib import lidar_perception_func_lib as LPFL
+from .node_shutdown import install_shutdown
 
 #---------------Variable Setting---------------
-# Subscribe할 토픽 이름
-SUB_TOPIC_NAME = 'lidar_processed'  # 구독할 토픽 이름
-
-# Publish할 토픽 이름
-PUB_TOPIC_NAME = 'lidar_obstacle_info'  # 물체 감지 여부를 퍼블리시할 토픽 이름
+SUB_TOPIC_NAME = 'lidar_processed'
+PUB_TOPIC_NAME = 'lidar_obstacle_info'
+PUB_LANE1_MIN_TOPIC_NAME = 'lidar_lane1_min'
 #----------------------------------------------
+
+VALID_RMIN = 0.12
+VALID_RMAX = 8.0
+
+
+def sector_min(ranges, start_angle, end_angle, range_min=VALID_RMIN, range_max=VALID_RMAX):
+    """섹터 안 유효 거리의 최소값. 없으면 inf. ANY-in-range가 아님."""
+    n = len(ranges)
+    if n == 0:
+        return float('inf')
+    start_angle = int(start_angle) % n
+    end_angle = int(end_angle) % n
+    if start_angle <= end_angle:
+        indices = range(start_angle, end_angle + 1)
+    else:
+        indices = list(range(start_angle, n)) + list(range(0, end_angle + 1))
+    found = float('inf')
+    for i in indices:
+        r = ranges[i]
+        if math.isfinite(r) and range_min <= r <= range_max:
+            if r < found:
+                found = r
+    return found
 
 
 class ObjectDetection(Node):
@@ -30,62 +54,54 @@ class ObjectDetection(Node):
             depth=1
         )
 
+        # 전방 0–90°, 110 cm 이내 물체
+        self.declare_parameter('lane1_start_angle', 0)
+        self.declare_parameter('lane1_end_angle', 90)
+        self.declare_parameter('stop_range_max', 1.10)
+
         self.subscriber = self.create_subscription(LaserScan, SUB_TOPIC_NAME, self.lidar_callback, self.qos_profile)
-        self.publisher = self.create_publisher(Bool, PUB_TOPIC_NAME, self.qos_profile) 
+        self.publisher = self.create_publisher(Bool, PUB_TOPIC_NAME, self.qos_profile)
+        self.lane1_pub = self.create_publisher(Float32, PUB_LANE1_MIN_TOPIC_NAME, self.qos_profile)
 
-        self.detection_checker = LPFL.StabilityDetector(consec_count=5) # 연속적으로 몇 번 감지 여부를 확인할지 설정
-
-
-
+        self.detection_checker = LPFL.StabilityDetector(consec_count=3)
 
     def lidar_callback(self, msg):
-         
-        start_angle = 0  # 원하는 각도 범위의 시작 값
-        end_angle = 30  # 원하는 각도 범위의 끝 값
-        
-        range_min = 0.5  # 원하는 거리 범위의 최소값 [m]
-        range_max = 2.0  # 원하는 거리 범위의 최대값 [m]
-
         ranges = msg.ranges
+        start_angle = int(self.get_parameter('lane1_start_angle').value)
+        end_angle = int(self.get_parameter('lane1_end_angle').value)
+        stop_range_max = float(self.get_parameter('stop_range_max').value)
 
-
-        detected = LPFL.detect_object(ranges=ranges, start_angle=start_angle, end_angle=end_angle, range_min=range_min, range_max=range_max)
-        
-        # ranges는 라이다 센서값 입력                                                        
-
-        # 각도 범위 지정
-        # 예시 1) 
-        # start_angle을 355도로, end_angle을 4도로 설정하면, 
-        # 355도에서 4도까지의 모든 각도(355, 356, 357, 358, 359, 0, 1, 2, 3, 4도)가 포함.
-        # 
-        # 예시 2)
-        # start_angle을 0도로, end_angle을 30도로 설정하면, 
-        # 0도에서 30도까지의 모든 각도(0, 1, 2, ..., 30도)가 포함.
-        # 
-        # 예시 3)
-        # start_angle을 180도로, end_angle을 190도로 설정하면, 
-        # 180도에서 190도까지의 모든 각도(180, 181, 182, ..., 190도)가 포함. 
-
-        # 거리범위 지정 
-        # range_min보다 크거나 같고, range_max보다 작거나 같은 거리값을 포함.
-
-        # 각도범위 및 거리범위를 둘 다 만족하는 범위에 라이다 센서값이 존재하면 True, 아니면 False 리턴. 
-
-
+        front_min = sector_min(ranges, start_angle, end_angle)
+        detected = math.isfinite(front_min) and front_min <= stop_range_max
         detection_result = self.detection_checker.check_consecutive_detections(detected)
 
         detection_msg = Bool()
         detection_msg.data = detection_result
         self.publisher.publish(detection_msg)
 
-        self.get_logger().info(f'Lidar Obstacle detected: {detection_result}')
+        min_msg = Float32()
+        min_msg.data = float(front_min)
+        self.lane1_pub.publish(min_msg)
+
+        self.get_logger().info(
+            f'Lidar Obstacle detected: {detection_result} '
+            f'front_min={front_min:.3f}'
+        )
+
 
 def main(args=None):
+    install_shutdown()
     rclpy.init(args=args)
     object_detection_node = ObjectDetection()
-    rclpy.spin(object_detection_node)
-    object_detection_node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(object_detection_node)
+    except (KeyboardInterrupt, SystemExit):
+        pass
+    finally:
+        object_detection_node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()

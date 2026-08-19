@@ -1,4 +1,42 @@
-ls /dev/ttyACM* /dev/ttyUSB*
+ls /dev/video* /dev/ttyACM* /dev/ttyUSB*
 sudo chmod 777 /dev/ttyACM0
+# 라이다 쓸 때:
+# sudo chmod 777 /dev/ttyUSB0
+
+# --- 실차 인지 테스트 (모터 OFF, serial 주석 유지) ---
+# cd ~/ros2_ws
+# source /opt/ros/humble/setup.bash && source install/setup.bash
+source ~/team14/ros2_ws/install/setup.bash
+
+# colcon build --symlink-install --packages-select launch_pkg debug_pkg camera_perception_pkg
+# source install/setup.bash
+#
+# 1) 카메라만
+# ros2 launch launch_pkg camera_only.launch.py cam_num:=0
+#
+# 2) BEV: 카메라 이미지 사다리꼴 (YOLO 없음). p=숫자 출력
+# ros2 launch launch_pkg bev_calibrate.launch.py cam_num:=0
+#
+# 3) 가중치 A/B (아래 SRC 에 2에서 복사한 숫자)
+# W=$HOME/ros2_ws/weights
+# SRC='src0_x:=238 src0_y:=316 src1_x:=402 src1_y:=313 src2_x:=501 src2_y:=476 src3_x:=155 src3_y:=476 cutting_idx:=300'
+# ros2 launch launch_pkg perception_debug.launch.py model:=$W/teamop_best.pt device:=cuda:0 cam_num:=0 $SRC
+# ros2 launch launch_pkg perception_debug.launch.py model:=$W/best_psh.pt device:=cuda:0 cam_num:=0 $SRC
+# ros2 launch launch_pkg perception_debug.launch.py model:=$W/team14_best.pt device:=cuda:0 cam_num:=0 $SRC
+# ros2 launch launch_pkg perception_debug.launch.py model:=$W/1taekim_ti_best.pt device:=cuda:0 cam_num:=0 $SRC
+# ros2 launch launch_pkg perception_debug.launch.py model:=$W/youngsangc_best.pt device:=cuda:0 cam_num:=0 $SRC
+# ros2 launch launch_pkg perception_debug.launch.py model:=$W/1taekim_best.pt device:=cuda:0 cam_num:=0 $SRC
+# ros2 launch launch_pkg perception_debug.launch.py model:=$W/cms1575_best.pt device:=cuda:0 cam_num:=0 $SRC
+
+# --- 주행 + bag (main 한 번에 기록, 기본 record:=true) ---
+#   ros2 launch launch_pkg main.launch.py
+#   ros2 launch launch_pkg main.launch.py require_green_start:=false drive_speed:=50
+#   ros2 launch launch_pkg main.launch.py skip_visualized:=true
+#   ros2 launch launch_pkg main.launch.py record:=false   # bag 없이 주행만
+# 재생 (serial_sender 끄고):
+#   ros2 bag play ~/team14/ros2_ws/bags/main_<STAMP>/eval
+# 예전 두 터미널 방식:
+#   ros2 launch launch_pkg main.launch.py record:=false
+#   ./scripts/run_session.sh
 
 python3 src/data_collection/data_collection.py

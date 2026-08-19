@@ -30,9 +30,10 @@ from rclpy.lifecycle import LifecycleNode
 from rclpy.lifecycle import TransitionCallbackReturn
 from rclpy.lifecycle import LifecycleState
 
-import message_filters
 from cv_bridge import CvBridge
 from ultralytics.utils.plotting import Annotator, colors
+from .imgmsg import numpy_to_imgmsg
+from .node_shutdown import close_cv_windows, install_shutdown
 
 from sensor_msgs.msg import Image
 from visualization_msgs.msg import Marker
@@ -55,6 +56,7 @@ class Yolov8VisualizerNode(LifecycleNode):
         # params
         self.declare_parameter("image_reliability",
                                QoSReliabilityPolicy.RELIABLE)
+        self.declare_parameter("show_image", True)
 
         self.get_logger().info("Debug node created")
 
@@ -68,6 +70,7 @@ class Yolov8VisualizerNode(LifecycleNode):
             durability=QoSDurabilityPolicy.VOLATILE,
             depth=1
         )
+        self.show_image = self._param_as_bool("show_image", True)
 
         # pubs
         self._dbg_pub = self.create_publisher(Image, "yolov8_visualized_img", 10)
@@ -78,28 +81,50 @@ class Yolov8VisualizerNode(LifecycleNode):
 
         return TransitionCallbackReturn.SUCCESS
 
+    def _param_as_bool(self, name: str, default: bool = True) -> bool:
+        pv = self.get_parameter(name).get_parameter_value()
+        # launch가 문자열 "true"로 넘기면 bool_value 필드는 비어 False가 된다.
+        type_id = int(pv.type)
+        if type_id == 1:  # PARAMETER_BOOL
+            return bool(pv.bool_value)
+        if type_id == 4:  # PARAMETER_STRING
+            return pv.string_value.strip().lower() in ("1", "true", "yes", "on")
+        if type_id == 2:  # PARAMETER_INTEGER
+            return bool(pv.integer_value)
+        return default
+
     def on_activate(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info(f'Activating {self.get_name()}')
 
-        # subs
-        self.image_sub = message_filters.Subscriber(
-            self, Image, "image_raw", qos_profile=self.image_qos_profile)
-        self.detections_sub = message_filters.Subscriber(
-            self, DetectionArray, "detections", qos_profile=10)
+        self._last_image_msg = None
+        self._last_detection_msg = None
+        self._logged_first_image = False
+        self._logged_first_det = False
 
-        self._synchronizer = message_filters.ApproximateTimeSynchronizer(
-            (self.image_sub, self.detections_sub), 10, 0.5)
-        self._synchronizer.registerCallback(self.detections_cb)
+        # ApproximateTimeSynchronizer(queue=10, slop=0.5)는 YOLO 첫 추론이
+        # 카메라 주기보다 길면 매칭이 영원히 실패하고 imshow가 안 뜬다.
+        self.image_sub = self.create_subscription(
+            Image, "image_raw", self._image_cb, self.image_qos_profile)
+        self.detections_sub = self.create_subscription(
+            DetectionArray, "detections", self._detections_only_cb, 10)
+
+        if self.show_image:
+            try:
+                cv2.namedWindow("yolov8_visualized_img", cv2.WINDOW_NORMAL)
+                cv2.waitKey(1)
+                self.get_logger().info(
+                    "OpenCV window 'yolov8_visualized_img' opened (waits for /image_raw)")
+            except Exception as exc:
+                self.get_logger().error(f"OpenCV window failed: {exc}")
+                self.show_image = False
 
         return TransitionCallbackReturn.SUCCESS
 
     def on_deactivate(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info(f'Deactivating {self.get_name()}')
 
-        self.destroy_subscription(self.image_sub.sub)
-        self.destroy_subscription(self.detections_sub.sub)
-
-        del self._synchronizer
+        self.destroy_subscription(self.image_sub)
+        self.destroy_subscription(self.detections_sub)
 
         return TransitionCallbackReturn.SUCCESS
 
@@ -246,56 +271,88 @@ class Yolov8VisualizerNode(LifecycleNode):
 
         return marker
 
+    def _image_cb(self, img_msg: Image) -> None:
+        self._last_image_msg = img_msg
+        if not self._logged_first_image:
+            self._logged_first_image = True
+            self.get_logger().info("first /image_raw — overlay window will update")
+        self.detections_cb(img_msg, self._last_detection_msg)
+
+    def _detections_only_cb(self, detection_msg: DetectionArray) -> None:
+        self._last_detection_msg = detection_msg
+        if not self._logged_first_det:
+            self._logged_first_det = True
+            names = [d.class_name for d in detection_msg.detections[:8]]
+            self.get_logger().info(
+                f"first /detections n={len(detection_msg.detections)} names={names}")
+        if self._last_image_msg is not None:
+            self.detections_cb(self._last_image_msg, detection_msg)
+
     def detections_cb(self, img_msg: Image, detection_msg: DetectionArray) -> None:
 
         cv_image = self.cv_bridge.imgmsg_to_cv2(img_msg)
         bb_marker_array = MarkerArray()
         kp_marker_array = MarkerArray()
 
-        detection: Detection
-        for detection in detection_msg.detections:
+        if detection_msg is not None:
+            detection: Detection
+            for detection in detection_msg.detections:
 
-            # random color
-            label = detection.class_name
+                # random color
+                label = detection.class_name
 
-            if label not in self._class_to_color:
-                r = random.randint(0, 255)
-                g = random.randint(0, 255)
-                b = random.randint(0, 255)
-                self._class_to_color[label] = (r, g, b)
+                if label not in self._class_to_color:
+                    r = random.randint(0, 255)
+                    g = random.randint(0, 255)
+                    b = random.randint(0, 255)
+                    self._class_to_color[label] = (r, g, b)
 
-            color = self._class_to_color[label]
+                color = self._class_to_color[label]
 
-            cv_image = self.draw_box(cv_image, detection, color)
-            cv_image = self.draw_mask(cv_image, detection, color)
-            cv_image = self.draw_keypoints(cv_image, detection)
+                cv_image = self.draw_box(cv_image, detection, color)
+                cv_image = self.draw_mask(cv_image, detection, color)
+                cv_image = self.draw_keypoints(cv_image, detection)
 
-            if detection.bbox3d.frame_id:
-                marker = self.create_bb_marker(detection, color)
-                marker.header.stamp = img_msg.header.stamp
-                marker.id = len(bb_marker_array.markers)
-                bb_marker_array.markers.append(marker)
-
-            if detection.keypoints3d.frame_id:
-                for kp in detection.keypoints3d.data:
-                    marker = self.create_kp_marker(kp)
-                    marker.header.frame_id = detection.keypoints3d.frame_id
+                if detection.bbox3d.frame_id:
+                    marker = self.create_bb_marker(detection, color)
                     marker.header.stamp = img_msg.header.stamp
-                    marker.id = len(kp_marker_array.markers)
-                    kp_marker_array.markers.append(marker)
+                    marker.id = len(bb_marker_array.markers)
+                    bb_marker_array.markers.append(marker)
+
+                if detection.keypoints3d.frame_id:
+                    for kp in detection.keypoints3d.data:
+                        marker = self.create_kp_marker(kp)
+                        marker.header.frame_id = detection.keypoints3d.frame_id
+                        marker.header.stamp = img_msg.header.stamp
+                        marker.id = len(kp_marker_array.markers)
+                        kp_marker_array.markers.append(marker)
 
         # publish dbg image
-        self._dbg_pub.publish(self.cv_bridge.cv2_to_imgmsg(cv_image,
-                                                           encoding=img_msg.encoding))
+        self._dbg_pub.publish(numpy_to_imgmsg(cv_image, encoding='bgr8',
+                                              header=img_msg.header))
         self._bb_markers_pub.publish(bb_marker_array)
         self._kp_markers_pub.publish(kp_marker_array)
 
+        if self.show_image:
+            try:
+                cv2.imshow("yolov8_visualized_img", cv_image)
+                cv2.waitKey(1)
+            except Exception as exc:
+                self.get_logger().warn(f"imshow failed: {exc}")
+
 
 def main():
+    install_shutdown(close_cv=True)
     rclpy.init()
     node = Yolov8VisualizerNode()
     node.trigger_configure()
     node.trigger_activate()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    except (KeyboardInterrupt, SystemExit):
+        pass
+    finally:
+        close_cv_windows()
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()

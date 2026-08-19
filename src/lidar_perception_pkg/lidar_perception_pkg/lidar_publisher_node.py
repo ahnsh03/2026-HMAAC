@@ -13,6 +13,7 @@ import tf2_ros
 import geometry_msgs.msg
 # from .lib.rplidar import RPLidar, RPLidarException
 from .lib import lidar_perception_func_lib as LPFL
+from .node_shutdown import install_shutdown
 import numpy as np
 
 #---------------Variable Setting---------------
@@ -129,15 +130,17 @@ class LidarSensorDataPublisher(Node):
             self.get_logger().error(f'Failed to properly shutdown LIDAR: {e}')
 
 def main(args=None):
+    install_shutdown()
     rclpy.init(args=args)
     lidar_publisher = LidarSensorDataPublisher()
     try:
         rclpy.spin(lidar_publisher)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, SystemExit):
         pass
     finally:
         lidar_publisher.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

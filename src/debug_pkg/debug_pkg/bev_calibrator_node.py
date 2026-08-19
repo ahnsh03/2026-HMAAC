@@ -1,9 +1,12 @@
-"""lane2 마스크 IPM/BEV 트랙바 캘리브레이션.
+"""카메라 이미지로 IPM/BEV 사다리꼴을 맞춘다. YOLO 마스크를 쓰지 않는다.
 
-기본 src_mat 는 lane_info_extractor 하드코딩과 같다.
-  p : launch 파라미터 문자열 출력
-  s : src_mat.json 저장 (HMAAC_SESSION 또는 cwd)
-  q : 종료
+src_mat 는 장착 기하(노면 사다리꼴)이므로 가중치와 무관하다.
+차선이 BEV에서 세로로 서게 맞춘 뒤, 같은 숫자로 여러 .pt 를 A/B 한다.
+
+점 순서 (교육 기본값과 동일):
+  0 원거리-좌, 1 원거리-우, 2 근거리-우, 3 근거리-좌
+
+키: p = launch 인자 출력,  s = src_mat.json 저장,  q = 종료
 """
 
 import json
@@ -12,13 +15,14 @@ import os
 import cv2
 import numpy as np
 import rclpy
+from cv_bridge import CvBridge
 from rclpy.node import Node
 from rclpy.qos import QoSDurabilityPolicy, QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
-
-from camera_perception_pkg.lib import camera_perception_func_lib as CPFL
-from interfaces_pkg.msg import DetectionArray
+from sensor_msgs.msg import Image
+from .node_shutdown import close_cv_windows, install_shutdown
 
 DEFAULT_SRC = [(238, 316), (402, 313), (501, 476), (155, 476)]
+CORNER_LABELS = ("0 far-L", "1 far-R", "2 near-R", "3 near-L")
 WIN = "bev_calibrator"
 
 
@@ -30,6 +34,14 @@ def _get(name):
     return cv2.getTrackbarPos(name, WIN)
 
 
+def _warp(bgr, src, dst):
+    src_f = np.float32(src)
+    dst_f = np.float32(dst)
+    matrix = cv2.getPerspectiveTransform(src_f, dst_f)
+    h, w = bgr.shape[:2]
+    return cv2.warpPerspective(bgr, matrix, (w, h))
+
+
 class BevCalibratorNode(Node):
     def __init__(self):
         super().__init__("bev_calibrator_node")
@@ -39,29 +51,28 @@ class BevCalibratorNode(Node):
             durability=QoSDurabilityPolicy.VOLATILE,
             depth=1,
         )
-        self.edge = None
-        self.create_subscription(DetectionArray, "detections", self._on_det, qos)
+        self.bridge = CvBridge()
+        self.frame = None
+        self.create_subscription(Image, "image_raw", self._on_image, qos)
         cv2.namedWindow(WIN, cv2.WINDOW_NORMAL)
         w, h = 640, 480
         for i, (x, y) in enumerate(DEFAULT_SRC):
             _tb(f"src{i}_x", x, w - 1)
             _tb(f"src{i}_y", y, h - 1)
         _tb("cutting_idx", 300, h - 1)
-        self.get_logger().info("p=print params  s=save json  q=quit")
+        self.get_logger().info(
+            "Fit the trapezoid to the 2nd-lane road in the camera image. "
+            "p=print  s=save json  q=quit"
+        )
 
-    def _on_det(self, msg: DetectionArray):
-        if len(msg.detections) == 0:
-            return
+    def _on_image(self, msg: Image):
         try:
-            self.edge = CPFL.draw_edges(msg, cls_name="lane2", color=255)
+            self.frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
         except Exception as exc:
-            self.get_logger().warn(f"draw_edges: {exc}")
+            self.get_logger().warn(f"cv_bridge: {exc}")
 
     def current_src(self):
-        pts = []
-        for i in range(4):
-            pts.append([_get(f"src{i}_x"), _get(f"src{i}_y")])
-        return pts
+        return [[_get(f"src{i}_x"), _get(f"src{i}_y")] for i in range(4)]
 
     def print_params(self):
         src = self.current_src()
@@ -78,19 +89,17 @@ class BevCalibratorNode(Node):
 
     def save_json(self):
         src, cut = self.print_params()
-        payload = {"src_mat": src, "cutting_idx": cut}
-        session = os.environ.get("HMAAC_SESSION", "")
-        path = os.path.join(session, "src_mat.json") if session else "src_mat.json"
+        path = os.path.join(os.environ.get("HMAAC_SESSION", "") or ".", "src_mat.json")
         with open(path, "w") as f:
-            json.dump(payload, f, indent=2)
+            json.dump({"src_mat": src, "cutting_idx": cut}, f, indent=2)
         self.get_logger().info(f"saved {path}")
 
     def render(self):
-        if self.edge is None:
+        if self.frame is None:
             blank = np.zeros((480, 640, 3), dtype=np.uint8)
             cv2.putText(
                 blank,
-                "waiting /detections lane2 ...",
+                "waiting /image_raw ...",
                 (20, 240),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.7,
@@ -99,10 +108,9 @@ class BevCalibratorNode(Node):
             )
             cv2.imshow(WIN, blank)
             return
-        edge = self.edge.copy()
-        if edge.dtype != np.uint8:
-            edge = cv2.convertScaleAbs(edge)
-        h, w = edge.shape[:2]
+
+        vis = self.frame.copy()
+        h, w = vis.shape[:2]
         src = np.float32(self.current_src())
         dst = np.float32(
             [
@@ -112,34 +120,32 @@ class BevCalibratorNode(Node):
                 [round(w * 0.3), h],
             ]
         )
-        vis_src = cv2.cvtColor(edge, cv2.COLOR_GRAY2BGR)
         for i, (x, y) in enumerate(src.astype(int)):
-            cv2.circle(vis_src, (int(x), int(y)), 6, (0, 0, 255), -1)
+            cv2.circle(vis, (int(x), int(y)), 6, (0, 0, 255), -1)
             cv2.putText(
-                vis_src,
-                str(i),
+                vis,
+                CORNER_LABELS[i],
                 (int(x) + 6, int(y) - 6),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
+                0.5,
                 (0, 255, 0),
                 2,
             )
-        cv2.polylines(vis_src, [src.astype(np.int32)], True, (0, 255, 255), 1)
+        cv2.polylines(vis, [src.astype(np.int32)], True, (0, 255, 255), 2)
 
-        bev = CPFL.bird_convert(edge, srcmat=src.tolist(), dstmat=dst.tolist())
-        bev_u8 = cv2.convertScaleAbs(bev)
-        cut = _get("cutting_idx")
-        cut = min(max(cut, 0), max(h - 1, 0))
-        roi = bev_u8[cut:] if cut < bev_u8.shape[0] else bev_u8
-        bev_bgr = cv2.cvtColor(bev_u8, cv2.COLOR_GRAY2BGR)
-        cv2.line(bev_bgr, (0, cut), (w - 1, cut), (0, 0, 255), 1)
-        roi_bgr = cv2.cvtColor(roi, cv2.COLOR_GRAY2BGR) if roi.size else bev_bgr
-        roi_bgr = cv2.resize(roi_bgr, (w, h))
-        mosaic = np.hstack([vis_src, bev_bgr, roi_bgr])
+        bev = _warp(self.frame, src, dst)
+        cut = min(max(_get("cutting_idx"), 0), max(h - 1, 0))
+        cv2.line(bev, (0, cut), (w - 1, cut), (0, 0, 255), 1)
+        roi = bev[cut:] if cut < bev.shape[0] else bev
+        roi = cv2.resize(roi, (w, h)) if roi.size else bev
+        hint = "trapezoid on road  |  lanes should be vertical in BEV"
+        cv2.putText(vis, hint, (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+        mosaic = np.hstack([vis, bev, roi])
         cv2.imshow(WIN, mosaic)
 
 
 def main(args=None):
+    install_shutdown(close_cv=True)
     rclpy.init(args=args)
     node = BevCalibratorNode()
     try:
@@ -153,12 +159,13 @@ def main(args=None):
                 node.print_params()
             if key == ord("s"):
                 node.save_json()
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, SystemExit):
         pass
     finally:
-        cv2.destroyAllWindows()
+        close_cv_windows()
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

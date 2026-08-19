@@ -5,6 +5,7 @@ from interfaces_pkg.msg import LaneInfo, PathPlanningResult
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import CubicSpline
+from .node_shutdown import install_shutdown
 
 #---------------Variable Setting---------------
 SUB_LANE_TOPIC_NAME = "yolov8_lane_info"  # lane_info_extractor 노드에서 퍼블리시하는 타겟 지점 토픽
@@ -91,15 +92,17 @@ class PathPlannerNode(Node):
 
 
 def main(args=None):
+    install_shutdown()
     rclpy.init(args=args)
     node = PathPlannerNode()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, SystemExit):
         print("\n\nshutdown\n\n")
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

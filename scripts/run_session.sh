@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # 시도 폴더를 만들고 bag 을 켠다. Ctrl+C 로 bag 과 함께 종료.
 #
+# 기본은 main.launch.py 의 record:=true 로 같이 기록한다.
+# 이 스크립트는 main 을 record:=false 로 켠 뒤 따로 bag 을 쓸 때만 쓴다.
+#
 #   source /opt/ros/humble/setup.bash && source ~/ros2_ws/install/setup.bash
+#   # 다른 터미널에서 먼저: ros2 launch launch_pkg main.launch.py record:=false
 #   ./scripts/run_session.sh
-#   # 다른 터미널에서 launch
 set -euo pipefail
 
 ROOT="${HMAAC_LOG_ROOT:-$HOME/hmaac_logs}"
@@ -39,15 +42,15 @@ echo "export HMAAC_SESSION=${SESSION}" >> "$SESSION/session.env"
 
 echo ""
 echo "SESSION: $SESSION"
-echo "다른 터미널에서 launch 한 뒤, 이 창에서 bag 이 돈다."
-echo "마커: ros2 run debug_pkg marker_node"
+echo "main.launch 가 뜬 뒤 이 창에서 bag 이 돈다. 카메라·라이다·제어를 같이 기록한다."
+echo "재생(serial 끄고): ros2 bag play ${SESSION}/bag/eval"
 echo "종료: Ctrl+C"
 echo ""
 
 cleanup() {
   echo ""
   echo "stopped. 경로: $SESSION"
-  echo "재생: ros2 bag play ${SESSION}/bag/eval"
+  echo "재생(serial 끄고): ros2 bag play ${SESSION}/bag/eval"
 }
 trap cleanup EXIT
 

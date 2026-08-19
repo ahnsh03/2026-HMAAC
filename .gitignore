@@ -8,3 +8,11 @@
 # Runtime data-collection sessions (sample_dataset and shipped assets stay tracked)
 src/camera_perception_pkg/camera_perception_pkg/lib/Collected_Datasets/20*/
 src/camera_perception_pkg/camera_perception_pkg/lib/Collected_Datasets/_*/
+src/camera_perception_pkg/camera_perception_pkg/lib/Collected_Datasets/*.zip
+src/camera_perception_pkg/camera_perception_pkg/lib/Collected_Datasets/Last_train_dataset_frame/
+
+# BEV calibrator output
+src_mat.json
+
+# Runtime rosbag recordings from sensor_bag.launch.py
+bags/
