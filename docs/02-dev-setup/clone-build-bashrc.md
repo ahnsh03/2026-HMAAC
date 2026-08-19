@@ -21,8 +21,12 @@ cd ~/ros2_ws
 **14팀 실차/개발용**은 팀 레포를 사용한다:
 
 ```bash
-git clone -b 2026 https://github.com/ahnsh03/2026-HMAAC.git ros2_ws
+git clone https://github.com/ahnsh03/2026-HMAAC.git ros2_ws   # 기본 브랜치 main
 # 또는 이미 클론된 H-Mobility-Autonomous-Advanced-Course 디렉터리 사용
+
+# 교육 때 -b 2026 으로 클론해 둔 것이 있다면 (2026 브랜치는 main 으로 바뀌었다):
+#   git config --replace-all remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+#   git fetch origin --prune && git checkout -B main origin/main
 ```
 
 터미널 붙여넣기: `Ctrl+Shift+V` / 복사: `Ctrl+Shift+C`
