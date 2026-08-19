@@ -68,9 +68,11 @@ max(0, 0, 0) == red_ratio  →  "Red"
 ## 재현
 
 ```bash
+# 이미지는 시뮬 레포(2026-HMAAC-Sim)의 docker/Dockerfile.cuda 로 빌드한다.
+#   cd <시뮬 레포>/docker && docker compose build hmobility-sim-gpu
 docker run --rm --gpus all --ipc=host \
   -v /home/aim06/projects/2026-H-Mobility-Class:/work -w /work \
-  hmobility-humble:cuda \
+  hmobility-sim:humble-cuda \
   python3 /work/data/_scripts/verify_tl_hsv.py
 ```
 
