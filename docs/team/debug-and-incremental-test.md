@@ -38,7 +38,7 @@
 
 `main.launch.py`는 `debug:=true`(기본)일 때 `yolov8_visualizer_node` + `viz_mosaic_node`를 같이 띄운다. **`race_viz` 창 하나**가 주행 중 기본 화면이다. `debug:=false`면 창이 없다.
 
-> 예전에 있던 `control_hud_node` · `lidar_scan_visualizer_node` · `marker_node`는 `race`가 `viz_mosaic_node`로 통합하며 정리했다. 특히 `control_hud_node`가 보던 `/control_debug` 토픽은 더 이상 발행되지 않는다(모션 로그 문자열로 흡수). 옛 노드가 필요하면 `backup/pre-race-merge-2026` 태그에 있다.
+> 예전에 있던 `control_hud_node` · `lidar_scan_visualizer_node` · `marker_node`는 `race` 브랜치가 `viz_mosaic_node`로 통합하며 정리했다. 특히 `control_hud_node`가 보던 `/control_debug` 토픽은 더 이상 발행되지 않는다(모션 로그 문자열로 흡수). 옛 노드가 필요하면 `backup/pre-race-merge-2026` 태그에 있다.
 
 ### 패키지 밖 디버그
 

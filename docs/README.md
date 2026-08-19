@@ -80,3 +80,23 @@ docs/
 - [조교 구두 미션 (가규정)](06-final-eval/verbal-briefing.md)
 - [미션 전략 · 정지 퓨전](06-final-eval/mission-strategy.md)
 - [로깅 · 실험 준비](06-final-eval/logging-and-experiments.md)
+
+## 저장소 브랜치 · 태그
+
+교육 중에는 문서용 `2026`과 실차 검증용 `race`를 따로 클론해 썼지만, 2026-08-19에 **`main` 하나로 합쳤다.**
+
+| ref | 무엇 |
+|---|---|
+| **`main`** | 유일한 브랜치. 문서 + 실차 검증 코드 |
+| `race-final-2026-08-14` | 대회 주행에 실제로 쓴 `race` 최종본 (`8c09832`) 박제 |
+| `backup/pre-race-merge-2026` | 병합 직전 `2026` 끝. 정리된 디버그 노드 3개가 여기 있다 |
+| `backup/2026-team14` | 문서 전용 브랜치였음 (`launch-args.md`는 `main`에 병합됨) |
+| `backup/newmp` · `backup/TEAMMODE` | 팀원 제어기 시도. 실차 미검증 — [team/archive/](team/archive/README.md) |
+
+```bash
+git clone https://github.com/ahnsh03/2026-HMAAC.git ~/ros2_ws   # main
+git show race-final-2026-08-14                                   # 대회 당시 상태
+git checkout -b look backup/pre-race-merge-2026                  # 정리된 노드 꺼내기
+```
+
+`main`의 코드는 `race-final-2026-08-14`의 `src/`와 **바이트 단위로 동일하다.** 병합 시 문서·`tools/`만 얹었다.

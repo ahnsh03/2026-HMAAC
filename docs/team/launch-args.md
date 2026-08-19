@@ -1,6 +1,6 @@
 # Launch 인자 — `이름:=값`으로 넘기는 변수
 
-기준: `2026` 트렁크(= race 코드 병합본), 2026-08-19 재검증.
+기준: `main` (구 `2026` + `race` 병합본), 2026-08-19 재검증.
 소스: [`src/launch_pkg/launch/`](../../src/launch_pkg/launch/).
 실행 예: [cheat-sheet.md](cheat-sheet.md) · 제어 숫자 의미: [controller-tuning.md](controller-tuning.md)
 

@@ -1,12 +1,12 @@
 # 제어기 튜닝 — 지금 도는 코드와 남은 노브
 
-기준: `2026` 트렁크(= race 병합본), 2026-08-19 재작성.
+기준: `main` (구 `2026` + `race` 병합본), 2026-08-19 재작성.
 소스: [`motion_planner_node.py`](../../src/decision_making_pkg/decision_making_pkg/motion_planner_node.py) · 인자: [launch-args.md](launch-args.md)
 인지 비교: [teamop-vs-team14.md](teamop-vs-team14.md) · 초록 출발: [wait-green.md](wait-green.md)
 
 주행 기본 가중치는 **`teamop_best.pt`** (자동 선택). `best_psh`는 차선만 A/B용, `best_psh_v2`는 차선이 없어 쓰지 않는다 — [`weights/README.md`](../../weights/README.md)
 
-> 이 문서는 2026-08-13 판에서 **bang-bang 기준으로 쓰여 있었다.** race가 8/13~14에 조향 파이프라인을 통째로 갈아서, 그때의 P0/P1 노브 대부분이 이미 코드에 들어갔다. 아래는 **지금 도는 코드** 기준이다. 옛 계획 대비 무엇이 반영됐는지는 §5.
+> 이 문서는 2026-08-13 판에서 **bang-bang 기준으로 쓰여 있었다.** `race` 브랜치가 8/13~14에 조향 파이프라인을 통째로 갈아서, 그때의 P0/P1 노브 대부분이 이미 코드에 들어갔다. (그 브랜치는 `main`에 병합 후 `race-final-2026-08-14` 태그로 박제하고 삭제했다.) 아래는 **지금 도는 코드** 기준이다. 옛 계획 대비 무엇이 반영됐는지는 §5.
 
 ---
 

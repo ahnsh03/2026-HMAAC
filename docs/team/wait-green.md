@@ -1,6 +1,6 @@
 # 초록 출발 (WAIT_GREEN)
 
-상태: **`2026` 트렁크에 구현됨** (`bc60881` + `/force_start` + 15초 타임아웃 `8c09832`).  
+상태: **`main`에 구현됨** (`bc60881` + `/force_start` + 15초 타임아웃 `8c09832`).  
 전제: 간략 미션은 출발선에서 적 → 첫 녹만 보고 출발. 랩 중 신호등으로 랩을 세지 않음.  
 관련: [controller-tuning.md](controller-tuning.md) · [tl-hsv-tuning.md](tl-hsv-tuning.md) · [mission-strategy.md](../06-final-eval/mission-strategy.md) · [verbal-briefing.md](../06-final-eval/verbal-briefing.md)
 

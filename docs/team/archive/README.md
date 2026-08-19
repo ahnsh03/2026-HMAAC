@@ -17,7 +17,9 @@
 | `TEAMMODE` | `cd76bf3` | qkrtjdghks2002 | 문법 정상, **실차 미검증** | 아이디어만 참고 |
 | `newmp` | `65c20a3` | seulhawon0414 | **실행 불가 (들여쓰기 붕괴)** | 아이디어만 참고 |
 
-실제 주행에 쓴 제어기는 `race` 브랜치다. 두 브랜치와 계보가 다르다 — `race`는 BEV 중심 오차 P 제어(`steer_k`), 아래 둘은 경로 기울기(slope) 기반이다.
+실제 주행에 쓴 제어기는 당시 `race` 브랜치다. 두 브랜치와 계보가 다르다 — `race`는 BEV 중심 오차 P 제어(`steer_k`), 아래 둘은 경로 기울기(slope) 기반이다.
+
+`race`는 이후 `main`에 병합되고 `race-final-2026-08-14` 태그로 박제한 뒤 삭제했다. 지금 브랜치는 `main` 하나다.
 
 ```
                     ┌─ cd76bf3  TEAMMODE
@@ -45,7 +47,7 @@ git checkout -b restore-teammode 3beba99
 git am docs/team/archive/2026-TEAMMODE-cd76bf3.patch
 ```
 
-`3beba99` 위에서만 깨끗이 적용된다. 지금 `2026` 끝이나 `race`에 얹으면 충돌한다.
+`3beba99` 위에서만 깨끗이 적용된다. 지금 `main` 끝에 얹으면 충돌한다.
 
 ---
 
@@ -129,7 +131,7 @@ steering_diff = target_steering - self.steering_command   # ← 클래스 밖
 
 `race`의 P 제어를 더 손볼 일이 생기면 이 둘에서 가져올 것은 두 가지다.
 
-1. **조향 변화율 제한(slew)** — `newmp`의 `MAX_STEERING_CHANGE`. `race`에는 이미 `steer_rate`로 들어가 있다(기본 `7.0` = 사실상 꺼짐). 조향이 튈 때 이 값을 낮추면 된다.
-2. **코너 감속** — `TEAMMODE`의 straight/corner 이원화. `race`는 `drive_speed` 단일값이라, 코너 이탈이 문제면 여기서 출발할 수 있다.
+1. **조향 변화율 제한(slew)** — `newmp`의 `MAX_STEERING_CHANGE`. `main`에는 이미 `steer_rate`로 들어가 있다(기본 `7.0` = 사실상 꺼짐). 조향이 튈 때 이 값을 낮추면 된다.
+2. **코너 감속** — `TEAMMODE`의 straight/corner 이원화. `main`은 `drive_speed` 단일값이라, 코너 이탈이 문제면 여기서 출발할 수 있다.
 
 `driving.ino`의 비례 PWM은 실차 포텐셔미터 캘리브레이션([potentiometer-calibration.md](../../03-hardware/potentiometer-calibration.md))을 다시 잡은 뒤에만 검토한다.
